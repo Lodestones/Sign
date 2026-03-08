@@ -2,13 +2,10 @@ name: Sign
 version: '${version}'
 main: gg.lode.sign.Sign
 api-version: '1.21'
-authors: [ SkyyIsCool ]
+authors: [ Apollo, SkyyIsCool, https://lode.gg/ ]
 description: Replace vanilla player nametags with fast & customizable text entities!
 dependencies:
   server:
-    packetevents:
-      required: true
-      load: BEFORE
     PlaceholderAPI:
       required: false
       load: BEFORE

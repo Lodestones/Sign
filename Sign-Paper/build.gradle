@@ -13,7 +13,7 @@ dependencies {
     implementation("net.kyori:adventure-text-minimessage:4.25.0")
     implementation("net.kyori:adventure-text-serializer-legacy:4.25.0")
     implementation("dev.jorel:commandapi-paper-shade:11.1.0")
-    compileOnly("com.github.retrooper:packetevents-spigot:2.10.1")
+    implementation("com.github.retrooper:packetevents-spigot:2.10.1")
     compileOnly("me.clip:placeholderapi:2.11.7")
     compileOnly("com.github.NEZNAMY:TAB-API:5.3.2")
 }
@@ -22,7 +22,6 @@ tasks {
     runServer {
         minecraftVersion("1.21.10")
         downloadPlugins {
-            modrinth("packetevents", "2.10.1")
             modrinth("VoidGen", "2.3.3")
             hangar("PlaceholderAPI", "2.11.7")
             modrinth("tab-was-taken", "5.3.2")
@@ -44,18 +43,14 @@ tasks {
         projectId = "voqEPXf8"
         version = rootProject.version
         versionType = vType
-        changelog = rootProject.file("CHANGELOG.md").text
         uploadFile = "jar"
         gameVersions = ["1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10"]
         uploadFile = tasks.shadowJar.archiveFile
         loaders = ["paper"]
-        syncBodyFrom = rootProject.file("README.md").text
         dependencies {
-            required.project("packetevents")
         }
     }
 
-    tasks.modrinth.dependsOn(tasks.modrinthSyncBody)
 }
 
 tasks.withType(AbstractRun.class).configureEach {
@@ -76,6 +71,8 @@ shadowJar {
         attributes('paperweight-mappings-namespace': 'mojang')
     }
     relocate('dev.jorel.commandapi', 'dev.jorel.commandapi.sign')
+    relocate('com.github.retrooper.packetevents', 'com.github.retrooper.packetevents.sign')
+    relocate('io.github.retrooper.packetevents', 'io.github.retrooper.packetevents.sign')
 }
 
 jar {
