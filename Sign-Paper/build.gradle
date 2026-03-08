@@ -39,9 +39,18 @@ tasks {
     }
 
     modrinth {
-        token = System.getenv("MODRINTH_TOKEN")
+        def envFile = rootProject.file(".env")
+        def envToken = System.getenv("MODRINTH_TOKEN")
+        if (envFile.exists() && !envToken) {
+            envFile.readLines().each { line ->
+                if (line.startsWith("MODRINTH_TOKEN=")) {
+                    envToken = line.split("=", 2)[1].trim()
+                }
+            }
+        }
+        token = envToken
         projectId = "JGpCpjCN"
-        version = rootProject.version
+        version = "v" + rootProject.version
         versionType = vType
         uploadFile = "jar"
         gameVersions = ["1.21", "1.21.1", "1.21.2", "1.21.3", "1.21.4", "1.21.5", "1.21.6", "1.21.7", "1.21.8", "1.21.9", "1.21.10", "1.21.11"]
