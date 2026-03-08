@@ -1,0 +1,3 @@
+[submodule "Sign-API"]
+	path = Sign-API
+	url = https://github.com/Lodestones/Sign-API.git
