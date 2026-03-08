@@ -27,7 +27,7 @@ public class Nametag implements INametag {
     private static final byte OPACITY_FULL = -1;
     private static final byte OPACITY_CROUCHING = 64;
     private static final float BASE_Y_OFFSET = 0.25f;
-    private static final float LINE_SPACING = 0.25f;
+    private static final float LINE_SPACING = 0.27f;
 
     private final Sign plugin;
     private final Player player;

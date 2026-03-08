@@ -5,8 +5,12 @@ import dev.jorel.commandapi.CommandAPIPaperConfig;
 import gg.lode.sign.api.ISign;
 import gg.lode.sign.api.SignAPI;
 import gg.lode.sign.api.event.SignReloadEvent;
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.settings.PacketEventsSettings;
+import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
 import gg.lode.sign.commands.SignCommand;
 import gg.lode.sign.config.SignConfig;
+import gg.lode.sign.listeners.PacketListener;
 import gg.lode.sign.listeners.PlayerListener;
 import gg.lode.sign.nametags.NametagManager;
 import gg.lode.sign.nametags.NametagScheduler;
@@ -30,6 +34,15 @@ public final class Sign extends JavaPlugin implements ISign {
 
     @Override
     public void onLoad() {
+        // Initialize PacketEvents
+        PacketEvents.setAPI(SpigotPacketEventsBuilder.build(this, new PacketEventsSettings()
+                .checkForUpdates(false)
+                .fullStackTrace(true)
+                .kickIfTerminated(false)
+                .kickOnPacketException(false)
+        ));
+        PacketEvents.getAPI().load();
+
         CommandAPI.onLoad(new CommandAPIPaperConfig(this).silentLogs(true));
 
         // Configuration
@@ -43,6 +56,7 @@ public final class Sign extends JavaPlugin implements ISign {
     public void onEnable() {
         instance = this;
         SignAPI.register(this);
+        PacketEvents.getAPI().init();
         CommandAPI.onEnable();
         PluginManager pluginManager = getServer().getPluginManager();
 
@@ -53,6 +67,7 @@ public final class Sign extends JavaPlugin implements ISign {
 
         // Register Listeners & Commands
         pluginManager.registerEvents(new PlayerListener(), this);
+        PacketEvents.getAPI().getEventManager().registerListener(new PacketListener(this));
         new SignCommand(this).register();
 
         // Other
@@ -70,6 +85,7 @@ public final class Sign extends JavaPlugin implements ISign {
     @Override
     public void onDisable() {
         nametagScheduler.stop();
+        PacketEvents.getAPI().terminate();
         CommandAPI.onDisable();
         getLogger().info("Sign has been disabled.");
     }
