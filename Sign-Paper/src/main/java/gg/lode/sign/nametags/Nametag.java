@@ -39,6 +39,12 @@ public class Nametag implements INametag {
     private final boolean condensed;
     private final int visibilityDistance;
 
+    // Global line override
+    private List<String> globalOverride;
+
+    // Per-viewer line overrides
+    private final Map<UUID, List<String>> viewerOverrides;
+
     // Condensed mode: single display
     private final ClientTextDisplay condensedDisplay;
 
@@ -53,6 +59,7 @@ public class Nametag implements INametag {
         this.plugin = Sign.getInstance();
         this.player = player;
         this.viewers = new HashSet<>();
+        this.viewerOverrides = new HashMap<>();
 
         NametagConfig config = plugin.config().getNametagConfig();
         this.lines = config.getLines();
@@ -155,10 +162,11 @@ public class Nametag implements INametag {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             boolean shouldSee = shouldSee(viewer);
             boolean isVisible = this.viewers.contains(viewer.getUniqueId());
+            boolean viewerDirty = dirty || hasOverride(viewer);
 
             if (shouldSee) {
                 if (isVisible) {
-                    if (dirty) this.update(viewer);
+                    if (viewerDirty) this.update(viewer);
                 } else {
                     this.show(viewer);
                 }
@@ -187,10 +195,12 @@ public class Nametag implements INametag {
 
         cachedSneaking = player.isSneaking();
         byte opacity = supportCrouching && cachedSneaking ? OPACITY_CROUCHING : OPACITY_FULL;
+        List<String> viewerLines = getLinesForViewer(viewer);
 
         if (condensed) {
-            cachedText = getJoinedText();
-            condensedDisplay.setText(cachedText);
+            Component text = getJoinedText(viewerLines);
+            if (!hasOverride(viewer)) cachedText = text;
+            condensedDisplay.setText(text);
             condensedDisplay.setLocation(player.getLocation());
             condensedDisplay.setTextOpacity(opacity);
 
@@ -200,9 +210,9 @@ public class Nametag implements INametag {
             packets.add(condensedDisplay.createMountPacket(this.player));
             ClientEntity.sendBundle(viewer, packets);
         } else {
-            List<Component> resolvedLines = resolveLines();
-            cachedLineTexts = resolvedLines;
-            applyLineTexts(resolvedLines);
+            List<Component> resolved = resolveLines(viewerLines);
+            if (!hasOverride(viewer)) cachedLineTexts = resolved;
+            applyLineTexts(resolved);
             setAllLocations(player.getLocation());
 
             List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() * 2 + 1);
@@ -230,7 +240,11 @@ public class Nametag implements INametag {
 
     @Override
     public void update(Player viewer) {
+        List<String> viewerLines = getLinesForViewer(viewer);
+
         if (condensed) {
+            Component text = getJoinedText(viewerLines);
+            condensedDisplay.setText(text);
             condensedDisplay.setLocation(player.getLocation());
 
             List<PacketWrapper<?>> packets = new ArrayList<>(2);
@@ -238,6 +252,8 @@ public class Nametag implements INametag {
             packets.add(condensedDisplay.createMountPacket(this.player));
             ClientEntity.sendBundle(viewer, packets);
         } else {
+            List<Component> resolved = resolveLines(viewerLines);
+            applyLineTexts(resolved);
             setAllLocations(player.getLocation());
 
             List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() + 1);
@@ -285,9 +301,20 @@ public class Nametag implements INametag {
         }
     }
 
+    private List<String> getLinesForViewer(Player viewer) {
+        List<String> perViewer = viewerOverrides.get(viewer.getUniqueId());
+        if (perViewer != null) return perViewer;
+        if (globalOverride != null) return globalOverride;
+        return lines;
+    }
+
     private List<Component> resolveLines() {
-        List<Component> result = new ArrayList<>(lines.size());
-        for (String line : lines) {
+        return resolveLines(lines);
+    }
+
+    private List<Component> resolveLines(List<String> linesToResolve) {
+        List<Component> result = new ArrayList<>(linesToResolve.size());
+        for (String line : linesToResolve) {
             String modified = line
                     .replace("{player}", player.getName())
                     .replace("{health}", String.valueOf(new DecimalFormat("#.##").format(player.getHealth())));
@@ -312,11 +339,53 @@ public class Nametag implements INametag {
     }
 
     private Component getJoinedText() {
-        List<Component> components = new ArrayList<>(lines.size());
-        for (Component resolved : resolveLines()) {
+        return getJoinedText(lines);
+    }
+
+    private Component getJoinedText(List<String> linesToResolve) {
+        List<Component> components = new ArrayList<>(linesToResolve.size());
+        for (Component resolved : resolveLines(linesToResolve)) {
             if (resolved != null) components.add(resolved);
         }
         return ComponentUtils.join(components);
+    }
+
+    @Override
+    public void setLines(List<String> lines) {
+        this.globalOverride = List.copyOf(lines);
+        updateVisibilityForAll();
+    }
+
+    @Override
+    public void setLines(Player viewer, List<String> lines) {
+        viewerOverrides.put(viewer.getUniqueId(), List.copyOf(lines));
+        if (this.viewers.contains(viewer.getUniqueId())) {
+            this.update(viewer);
+        }
+    }
+
+    @Override
+    public void release() {
+        this.globalOverride = null;
+        updateVisibilityForAll();
+    }
+
+    @Override
+    public void release(Player viewer) {
+        viewerOverrides.remove(viewer.getUniqueId());
+        if (this.viewers.contains(viewer.getUniqueId())) {
+            this.update(viewer);
+        }
+    }
+
+    @Override
+    public boolean hasOverride() {
+        return globalOverride != null;
+    }
+
+    @Override
+    public boolean hasOverride(Player viewer) {
+        return viewerOverrides.containsKey(viewer.getUniqueId()) || globalOverride != null;
     }
 
     private int getBackground() {

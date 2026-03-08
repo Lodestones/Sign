@@ -4,6 +4,7 @@ import dev.jorel.commandapi.CommandAPI;
 import dev.jorel.commandapi.CommandAPIPaperConfig;
 import gg.lode.sign.api.ISign;
 import gg.lode.sign.api.SignAPI;
+import gg.lode.sign.api.event.SignReloadEvent;
 import gg.lode.sign.commands.SignCommand;
 import gg.lode.sign.config.SignConfig;
 import gg.lode.sign.listeners.PlayerListener;
@@ -84,6 +85,7 @@ public final class Sign extends JavaPlugin implements ISign {
                 nametagScheduler.start();
             }
 
+            new SignReloadEvent().call();
             getLogger().info("Reloaded!");
             return true;
         } catch (Exception e) {
