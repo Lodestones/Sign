@@ -6,7 +6,6 @@ import org.bukkit.command.CommandSender;
 import java.util.List;
 
 public class MessageHelper {
-    private static final String PREFIX = "<#00BFFF>Sign";
     static String SUCCESS = "<#7EFF00>";
     static String WARN = "<#FFFF00>";
     static String DANGER = "<#FF0000>";
@@ -25,7 +24,7 @@ public class MessageHelper {
 
     public static void send(CommandSender sender, String message) {
         sender.sendMessage(
-                ComponentUtils.format(format("{prefix} <dark_gray>» <reset>" + message))
+                ComponentUtils.format(format(message))
         );
     }
 
@@ -37,7 +36,6 @@ public class MessageHelper {
 
     private static String format(String input) {
         return input
-                .replace("{prefix}", PREFIX)
                 .replace("{success}", "{start}{success_color}✔{end}")
                 .replace("{warn}", "{start}{warn_color}⚠{end}")
                 .replace("{danger}", "{start}{danger_color}❌{end}")

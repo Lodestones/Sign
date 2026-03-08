@@ -73,7 +73,6 @@ public class SignCommand extends CommandAPICommand {
                     messages.add("  <white>Scale <dark_gray>→ <hover:show_text:'{scale}'><gray><u>Hover".replace("{scale}", String.join("\n", scaleText)));
 
                     sender.sendMessage("");
-                    MessageHelper.send(sender, "<dark_gray>[<#00BFFF>&lᴘʟᴜɢɪɴ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ<dark_gray>]");
                     MessageHelper.send(sender, messages);
                     sender.sendMessage("");
                 })
