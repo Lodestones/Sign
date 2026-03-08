@@ -17,6 +17,7 @@ import gg.lode.sign.nametags.NametagScheduler;
 import gg.lode.sign.utils.VersionUpdater;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -71,6 +72,7 @@ public final class Sign extends JavaPlugin implements ISign {
         new SignCommand(this).register();
 
         // Other
+        new Metrics(this, 30001);
         DependencyHelper.load();
         NametagHandler.load();
 

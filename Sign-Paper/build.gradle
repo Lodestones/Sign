@@ -14,6 +14,7 @@ dependencies {
     implementation("net.kyori:adventure-text-serializer-legacy:4.25.0")
     implementation("dev.jorel:commandapi-paper-shade:11.1.0")
     implementation("com.github.retrooper:packetevents-spigot:2.10.1")
+    implementation("org.bstats:bstats-bukkit:3.1.0")
     compileOnly("me.clip:placeholderapi:2.11.7")
     compileOnly("com.github.NEZNAMY:TAB-API:5.3.2")
 }
@@ -82,6 +83,7 @@ shadowJar {
     relocate('dev.jorel.commandapi', 'dev.jorel.commandapi.sign')
     relocate('com.github.retrooper.packetevents', 'com.github.retrooper.packetevents.sign')
     relocate('io.github.retrooper.packetevents', 'io.github.retrooper.packetevents.sign')
+    relocate('org.bstats', 'gg.lode.sign.bstats')
 }
 
 jar {

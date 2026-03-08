@@ -26,6 +26,16 @@ public class PlayerListener implements Listener {
             }
 
             nametagManager.create(player);
+
+            // Show existing players' nametags to the new viewer after a short delay
+            // to ensure the client has received entity spawn packets
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                for (Nametag nametag : nametagManager.getAll()) {
+                    if (nametag.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
+                    nametag.updateVisibilityForAll();
+                }
+            }, 5L);
         }
     }
 
