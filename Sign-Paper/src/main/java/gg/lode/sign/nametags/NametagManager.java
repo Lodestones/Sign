@@ -1,5 +1,6 @@
 package gg.lode.sign.nametags;
 
+import gg.lode.sign.Sign;
 import gg.lode.sign.api.nametag.INametagManager;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import org.bukkit.Bukkit;
@@ -32,6 +33,16 @@ public class NametagManager implements INametagManager {
         Nametag nametag = new Nametag(player);
         nametag.updateVisibilityForAll();
         this.nametags.put(player.getUniqueId(), nametag);
+
+        // Re-show after a delay to guarantee mounts are received by all clients
+        Bukkit.getScheduler().runTaskLater(Sign.getInstance(), () -> {
+            if (!player.isOnline()) return;
+            Nametag n = this.nametags.get(player.getUniqueId());
+            if (n != null) {
+                n.hideForAll();
+                n.updateVisibilityForAll();
+            }
+        }, 10L);
     }
 
     @Override

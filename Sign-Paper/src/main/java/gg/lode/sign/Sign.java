@@ -87,6 +87,7 @@ public final class Sign extends JavaPlugin implements ISign {
     @Override
     public void onDisable() {
         nametagScheduler.stop();
+        nametagManager.removeAll();
         PacketEvents.getAPI().terminate();
         CommandAPI.onDisable();
         getLogger().info("Sign has been disabled.");

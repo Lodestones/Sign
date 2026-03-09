@@ -32,6 +32,7 @@ public class Nametag implements INametag {
     private final Sign plugin;
     private final Player player;
     private final Set<UUID> viewers;
+    private final Set<UUID> inRange;
 
     private final List<String> lines;
     private final boolean hideSelf;
@@ -59,6 +60,7 @@ public class Nametag implements INametag {
         this.plugin = Sign.getInstance();
         this.player = player;
         this.viewers = new HashSet<>();
+        this.inRange = new HashSet<>();
         this.viewerOverrides = new HashMap<>();
 
         NametagConfig config = plugin.config().getNametagConfig();
@@ -85,7 +87,7 @@ public class Nametag implements INametag {
     }
 
     private ClientTextDisplay createDisplay(NametagConfig config, int background, Vector3f translation) {
-        ClientTextDisplay display = new ClientTextDisplay(player.getLocation().setRotation(0, 0));
+        ClientTextDisplay display = new ClientTextDisplay(getHeadLocation());
         display.setTranslation(translation);
         display.setScale(config.getScale());
         display.setTextShadow(config.hasTextShadow());
@@ -121,13 +123,17 @@ public class Nametag implements INametag {
             Player viewer = Bukkit.getPlayer(uuid);
             return viewer == null || !viewer.isOnline();
         });
+        inRange.removeIf((uuid) -> {
+            Player viewer = Bukkit.getPlayer(uuid);
+            return viewer == null || !viewer.isOnline();
+        });
 
         boolean sneaking = player.isSneaking();
         boolean sneakingChanged = supportCrouching && sneaking != cachedSneaking;
         boolean dirty;
 
         if (condensed) {
-            setAllLocations(player.getLocation().setRotation(0, 0));
+            setAllLocations(getHeadLocation());
             Component newText = getJoinedText();
             boolean textChanged = !newText.equals(cachedText);
             dirty = textChanged || sneakingChanged;
@@ -156,21 +162,29 @@ public class Nametag implements INametag {
                     display.setTextOpacity(opacity);
                 }
             }
-            setAllLocations(player.getLocation().setRotation(0, 0));
+            setAllLocations(getHeadLocation());
         }
 
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             boolean shouldSee = shouldSee(viewer);
             boolean isVisible = this.viewers.contains(viewer.getUniqueId());
+            boolean wasInRange = this.inRange.contains(viewer.getUniqueId());
             boolean viewerDirty = dirty || hasOverride(viewer);
 
             if (shouldSee) {
-                if (isVisible) {
+                this.inRange.add(viewer.getUniqueId());
+
+                if (isVisible && !wasInRange) {
+                    // Re-entered range: respawn to ensure mount is intact
+                    this.hide(viewer);
+                    this.show(viewer);
+                } else if (isVisible) {
                     if (viewerDirty) this.update(viewer);
                 } else {
                     this.show(viewer);
                 }
             } else {
+                this.inRange.remove(viewer.getUniqueId());
                 if (isVisible) this.hide(viewer);
             }
         }
@@ -197,11 +211,13 @@ public class Nametag implements INametag {
         byte opacity = supportCrouching && cachedSneaking ? OPACITY_CROUCHING : OPACITY_FULL;
         List<String> viewerLines = getLinesForViewer(viewer);
 
+        org.bukkit.Location headLoc = getHeadLocation();
+
         if (condensed) {
             Component text = getJoinedText(viewerLines);
             if (!hasOverride(viewer)) cachedText = text;
             condensedDisplay.setText(text);
-            condensedDisplay.setLocation(player.getLocation());
+            condensedDisplay.setLocation(headLoc);
             condensedDisplay.setTextOpacity(opacity);
 
             List<PacketWrapper<?>> packets = new ArrayList<>(3);
@@ -213,7 +229,7 @@ public class Nametag implements INametag {
             List<Component> resolved = resolveLines(viewerLines);
             if (!hasOverride(viewer)) cachedLineTexts = resolved;
             applyLineTexts(resolved);
-            setAllLocations(player.getLocation());
+            setAllLocations(headLoc);
 
             List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() * 2 + 1);
             for (ClientTextDisplay display : lineDisplays) {
@@ -245,7 +261,7 @@ public class Nametag implements INametag {
         if (condensed) {
             Component text = getJoinedText(viewerLines);
             condensedDisplay.setText(text);
-            condensedDisplay.setLocation(player.getLocation());
+            condensedDisplay.setLocation(getHeadLocation());
 
             List<PacketWrapper<?>> packets = new ArrayList<>(2);
             packets.add(condensedDisplay.createMetadataPacket());
@@ -254,7 +270,7 @@ public class Nametag implements INametag {
         } else {
             List<Component> resolved = resolveLines(viewerLines);
             applyLineTexts(resolved);
-            setAllLocations(player.getLocation());
+            setAllLocations(getHeadLocation());
 
             List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() + 1);
             for (ClientTextDisplay display : lineDisplays) {
@@ -263,6 +279,43 @@ public class Nametag implements INametag {
             packets.add(ClientEntity.createMountPacket(this.player, lineDisplays));
             ClientEntity.sendBundle(viewer, packets);
         }
+    }
+
+    private void ensureDisplayCount(int needed) {
+        if (lineDisplays == null || needed <= lineDisplays.size()) return;
+
+        NametagConfig config = plugin.config().getNametagConfig();
+        int background = getBackground();
+
+        // Hide from all viewers before adding new displays
+        for (UUID viewerUuid : new HashSet<>(viewers)) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline()) {
+                hide(viewer);
+            }
+        }
+
+        // Create additional displays
+        for (int i = lineDisplays.size(); i < needed; i++) {
+            float y = BASE_Y_OFFSET + (needed - 1 - i) * LINE_SPACING;
+            lineDisplays.add(createDisplay(config, background, new Vector3f(0, y, 0)));
+        }
+
+        // Re-show to all viewers
+        for (UUID viewerUuid : new HashSet<>(inRange)) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline() && shouldSee(viewer)) {
+                show(viewer);
+            }
+        }
+    }
+
+    private org.bukkit.Location getHeadLocation() {
+        org.bukkit.Location loc = player.getLocation().clone();
+        loc.setYaw(0);
+        loc.setPitch(0);
+        loc.add(0, player.getHeight(), 0);
+        return loc;
     }
 
     private void setAllLocations(org.bukkit.Location location) {
@@ -276,9 +329,12 @@ public class Nametag implements INametag {
     }
 
     private void applyLineTexts(List<Component> resolvedLines) {
+        int displayCount = lineDisplays.size();
+        int lineCount = Math.min(resolvedLines.size(), displayCount);
+
         // Count visible lines and assign translations so visible lines stack with no gaps
         List<Integer> visibleIndices = new ArrayList<>();
-        for (int i = 0; i < resolvedLines.size(); i++) {
+        for (int i = 0; i < lineCount; i++) {
             if (resolvedLines.get(i) != null) {
                 visibleIndices.add(i);
             }
@@ -292,9 +348,9 @@ public class Nametag implements INametag {
             lineDisplays.get(idx).setText(resolvedLines.get(idx));
         }
 
-        // Hide lines that resolved to blank
-        for (int i = 0; i < resolvedLines.size(); i++) {
-            if (resolvedLines.get(i) == null) {
+        // Hide lines that resolved to blank or beyond the override's line count
+        for (int i = 0; i < displayCount; i++) {
+            if (i >= lineCount || resolvedLines.get(i) == null) {
                 lineDisplays.get(i).setText(Component.empty());
                 lineDisplays.get(i).setTranslation(new Vector3f(0, 0, 0));
             }
@@ -353,14 +409,17 @@ public class Nametag implements INametag {
     @Override
     public void setLines(List<String> lines) {
         this.globalOverride = List.copyOf(lines);
+        if (!condensed) ensureDisplayCount(lines.size());
         updateVisibilityForAll();
     }
 
     @Override
     public void setLines(Player viewer, List<String> lines) {
         viewerOverrides.put(viewer.getUniqueId(), List.copyOf(lines));
+        if (!condensed) ensureDisplayCount(lines.size());
         if (this.viewers.contains(viewer.getUniqueId())) {
-            this.update(viewer);
+            this.hide(viewer);
+            this.show(viewer);
         }
     }
 
@@ -374,7 +433,8 @@ public class Nametag implements INametag {
     public void release(Player viewer) {
         viewerOverrides.remove(viewer.getUniqueId());
         if (this.viewers.contains(viewer.getUniqueId())) {
-            this.update(viewer);
+            this.hide(viewer);
+            this.show(viewer);
         }
     }
 
@@ -386,6 +446,22 @@ public class Nametag implements INametag {
     @Override
     public boolean hasOverride(Player viewer) {
         return viewerOverrides.containsKey(viewer.getUniqueId()) || globalOverride != null;
+    }
+
+    public int[] getDisplayEntityIds() {
+        if (condensed) {
+            return new int[]{condensedDisplay.getEntityId()};
+        } else {
+            int[] ids = new int[lineDisplays.size()];
+            for (int i = 0; i < lineDisplays.size(); i++) {
+                ids[i] = lineDisplays.get(i).getEntityId();
+            }
+            return ids;
+        }
+    }
+
+    public boolean isVisibleTo(Player viewer) {
+        return viewers.contains(viewer.getUniqueId());
     }
 
     private int getBackground() {

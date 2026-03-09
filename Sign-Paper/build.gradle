@@ -71,7 +71,7 @@ tasks.withType(AbstractRun.class).configureEach {
     jvmArgs("-XX:+AllowEnhancedClassRedefinition")
 }
 
-version = rootProject.ext.has('version') ? rootProject.version : '1.0.0'
+version = rootProject.version
 
 shadowJar {
     archiveClassifier.set('')
