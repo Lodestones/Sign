@@ -73,7 +73,7 @@ public class ClientTextDisplay extends ClientDisplay {
                 EntityDataTypes.BYTE,
                 this.textOpacity
         ));
-        if (this.flags != 0) data.add(new EntityData<>(
+        data.add(new EntityData<>(
                 27,
                 EntityDataTypes.BYTE,
                 (byte) this.flags

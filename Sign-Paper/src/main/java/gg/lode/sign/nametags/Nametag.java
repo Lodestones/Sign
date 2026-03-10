@@ -37,6 +37,7 @@ public class Nametag implements INametag {
     private final List<String> lines;
     private final boolean hideSelf;
     private final boolean supportCrouching;
+    private final boolean seeThrough;
     private final boolean condensed;
     private final int visibilityDistance;
 
@@ -67,6 +68,7 @@ public class Nametag implements INametag {
         this.lines = config.getLines();
         this.hideSelf = config.shouldHideSelf();
         this.supportCrouching = config.supportsCrouching();
+        this.seeThrough = config.isSeeThrough();
         this.condensed = config.isCondenseHolograms();
         this.visibilityDistance = config.getVisibilityDistance();
 
@@ -145,6 +147,7 @@ public class Nametag implements INametag {
             if (sneakingChanged) {
                 cachedSneaking = sneaking;
                 condensedDisplay.setTextOpacity(sneaking ? OPACITY_CROUCHING : OPACITY_FULL);
+                condensedDisplay.setSeeThrough(sneaking ? false : seeThrough);
             }
         } else {
             List<Component> resolvedLines = resolveLines();
@@ -160,6 +163,7 @@ public class Nametag implements INametag {
                 byte opacity = sneaking ? OPACITY_CROUCHING : OPACITY_FULL;
                 for (ClientTextDisplay display : lineDisplays) {
                     display.setTextOpacity(opacity);
+                    display.setSeeThrough(sneaking ? false : seeThrough);
                 }
             }
             setAllLocations(getHeadLocation());
@@ -208,7 +212,8 @@ public class Nametag implements INametag {
         this.viewers.add(viewer.getUniqueId());
 
         cachedSneaking = player.isSneaking();
-        byte opacity = supportCrouching && cachedSneaking ? OPACITY_CROUCHING : OPACITY_FULL;
+        boolean crouching = supportCrouching && cachedSneaking;
+        byte opacity = crouching ? OPACITY_CROUCHING : OPACITY_FULL;
         List<String> viewerLines = getLinesForViewer(viewer);
 
         org.bukkit.Location headLoc = getHeadLocation();
@@ -219,6 +224,7 @@ public class Nametag implements INametag {
             condensedDisplay.setText(text);
             condensedDisplay.setLocation(headLoc);
             condensedDisplay.setTextOpacity(opacity);
+            condensedDisplay.setSeeThrough(crouching ? false : seeThrough);
 
             List<PacketWrapper<?>> packets = new ArrayList<>(3);
             packets.add(condensedDisplay.createSpawnPacket());
@@ -234,6 +240,7 @@ public class Nametag implements INametag {
             List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() * 2 + 1);
             for (ClientTextDisplay display : lineDisplays) {
                 display.setTextOpacity(opacity);
+                display.setSeeThrough(crouching ? false : seeThrough);
                 packets.add(display.createSpawnPacket());
                 packets.add(display.createMetadataPacket());
             }

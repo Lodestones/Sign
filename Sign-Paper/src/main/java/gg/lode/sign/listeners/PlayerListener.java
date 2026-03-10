@@ -81,25 +81,53 @@ public class PlayerListener implements Listener {
 
     @EventHandler
     public void onPlayerTeleport(PlayerTeleportEvent event) {
-        if (plugin.config().getNametagConfig().isEnabled()) {
-            Nametag nametag = nametagManager.get(event.getPlayer());
-            // NULL CHECK
-            if (nametag != null) {
-                nametag.updateVisibilityForAll();
-            }
+        if (!plugin.config().getNametagConfig().isEnabled()) return;
+
+        Player player = event.getPlayer();
+        Nametag nametag = nametagManager.get(player);
+        if (nametag != null) {
+            nametag.hideForAll();
         }
+
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+
+            Nametag n = nametagManager.get(player);
+            if (n != null) {
+                n.updateVisibilityForAll();
+            }
+
+            for (Nametag other : nametagManager.getAll()) {
+                if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
+                other.updateVisibilityForAll();
+            }
+        }, 20L);
     }
 
     @EventHandler
     public void onPlayerWorldChange(PlayerChangedWorldEvent event) {
-        if (plugin.config().getNametagConfig().isEnabled()) {
-            Nametag nametag = nametagManager.get(event.getPlayer());
-            // NULL CHECK
-            if (nametag != null) {
-                nametag.hideForAll();
-                nametag.updateVisibilityForAll();
-            }
+        if (!plugin.config().getNametagConfig().isEnabled()) return;
+
+        Player player = event.getPlayer();
+        Nametag nametag = nametagManager.get(player);
+        if (nametag != null) {
+            nametag.hideForAll();
         }
+
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+            if (!player.isOnline()) return;
+
+            Nametag n = nametagManager.get(player);
+            if (n != null) {
+                n.updateVisibilityForAll();
+            }
+
+            // Also refresh other nametags for this viewer
+            for (Nametag other : nametagManager.getAll()) {
+                if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
+                other.updateVisibilityForAll();
+            }
+        }, 20L);
     }
 
     @EventHandler
