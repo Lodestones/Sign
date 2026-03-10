@@ -75,9 +75,9 @@ nametags:
       y: 1
       z: 1
 
-  # Simple Voice Chat Integration (optional)
+  # Voice Chat Integration (optional)
   # Adds the {voice} placeholder to display a player's voice chat status icon.
-  # Requires the Simple Voice Chat plugin to be installed.
+  # Requires Simple Voice Chat. If Amplifier is also installed, its deafen state is used.
   voice-chat:
     # Enable the {voice} placeholder. If disabled, {voice} will resolve to an empty string.
     enabled: false

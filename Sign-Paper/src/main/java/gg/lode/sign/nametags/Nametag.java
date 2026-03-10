@@ -11,6 +11,7 @@ import gg.lode.sign.entities.ClientTextDisplay;
 import gg.lode.sign.utils.ComponentUtils;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
+import gg.lode.sign.utils.hooks.AmplifierHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
@@ -380,7 +381,11 @@ public class Nametag implements INametag {
         NametagConfig config = plugin.config().getNametagConfig();
         if (!config.isVoiceChatEnabled() || !DependencyHelper.isSimpleVoiceChatEnabled()) return "";
 
-        return switch (VoiceChatHook.getState(player.getUniqueId())) {
+        VoiceChatHook.VoiceState state = AmplifierHook.isActive()
+                ? AmplifierHook.getState(player.getUniqueId())
+                : VoiceChatHook.getState(player.getUniqueId());
+
+        return switch (state) {
             case SPEAKING -> config.getVoiceIconSpeaking();
             case IDLE -> config.getVoiceIconIdle();
             case DEAFENED -> config.getVoiceIconDeafened();

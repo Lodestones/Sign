@@ -17,6 +17,7 @@ import gg.lode.sign.nametags.NametagScheduler;
 import gg.lode.sign.utils.VersionUpdater;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
+import gg.lode.sign.utils.hooks.AmplifierHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.PluginManager;
@@ -75,8 +76,11 @@ public final class Sign extends JavaPlugin implements ISign {
         // Other
         new Metrics(this, 30001);
         DependencyHelper.load();
-        if (DependencyHelper.isSimpleVoiceChatEnabled() && config.getNametagConfig().isVoiceChatEnabled()) {
+        if (config.getNametagConfig().isVoiceChatEnabled() && DependencyHelper.isSimpleVoiceChatEnabled()) {
             VoiceChatHook.register(this);
+            if (DependencyHelper.isAmplifierEnabled()) {
+                AmplifierHook.register(this);
+            }
         }
         NametagHandler.load();
 
@@ -90,6 +94,7 @@ public final class Sign extends JavaPlugin implements ISign {
 
     @Override
     public void onDisable() {
+        AmplifierHook.unregister();
         VoiceChatHook.unregister();
         nametagScheduler.stop();
         nametagManager.removeAll();
