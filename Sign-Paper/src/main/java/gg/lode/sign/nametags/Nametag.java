@@ -11,6 +11,7 @@ import gg.lode.sign.entities.ClientTextDisplay;
 import gg.lode.sign.utils.ComponentUtils;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
+import gg.lode.sign.utils.hooks.VoiceChatHook;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -375,12 +376,25 @@ public class Nametag implements INametag {
         return resolveLines(lines);
     }
 
+    private String resolveVoiceIcon() {
+        NametagConfig config = plugin.config().getNametagConfig();
+        if (!config.isVoiceChatEnabled() || !DependencyHelper.isSimpleVoiceChatEnabled()) return "";
+
+        return switch (VoiceChatHook.getState(player.getUniqueId())) {
+            case SPEAKING -> config.getVoiceIconSpeaking();
+            case IDLE -> config.getVoiceIconIdle();
+            case DEAFENED -> config.getVoiceIconDeafened();
+            case DISCONNECTED -> config.getVoiceIconDisconnected();
+        };
+    }
+
     private List<Component> resolveLines(List<String> linesToResolve) {
         List<Component> result = new ArrayList<>(linesToResolve.size());
         for (String line : linesToResolve) {
             String modified = line
                     .replace("{player}", player.getName())
-                    .replace("{health}", String.valueOf(new DecimalFormat("#.##").format(player.getHealth())));
+                    .replace("{health}", String.valueOf(new DecimalFormat("#.##").format(player.getHealth())))
+                    .replace("{voice}", resolveVoiceIcon());
             if (DependencyHelper.isPlaceholderAPIEnabled()) {
                 modified = PlaceholderAPI.setPlaceholders(player, modified);
             }

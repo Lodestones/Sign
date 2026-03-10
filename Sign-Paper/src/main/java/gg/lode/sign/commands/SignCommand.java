@@ -71,6 +71,16 @@ public class SignCommand extends CommandAPICommand {
                     messages.add("  <white>Background <dark_gray>→ " + color(background) + background(background));
                     messages.add("  <white>Billboard <dark_gray>→ <gray>" + billboard.name());
                     messages.add("  <white>Scale <dark_gray>→ <hover:show_text:'{scale}'><gray><u>Hover".replace("{scale}", String.join("\n", scaleText)));
+                    messages.add("<dark_gray>• <white>Voice Chat");
+                    messages.add("  <white>Enabled <dark_gray>→ " + booleanToString(config.isVoiceChatEnabled()));
+                    if (config.isVoiceChatEnabled()) {
+                        List<String> iconText = new ArrayList<>();
+                        iconText.add("<white>Speaking <dark_gray>→ <gray>" + config.getVoiceIconSpeaking());
+                        iconText.add("<white>Idle <dark_gray>→ <gray>" + config.getVoiceIconIdle());
+                        iconText.add("<white>Deafened <dark_gray>→ <gray>" + config.getVoiceIconDeafened());
+                        iconText.add("<white>Disconnected <dark_gray>→ <gray>" + config.getVoiceIconDisconnected());
+                        messages.add("  <white>Icons <dark_gray>→ <hover:show_text:'{icons}'><gray><u>Hover".replace("{icons}", String.join("\n", iconText)));
+                    }
 
                     sender.sendMessage("");
                     MessageHelper.send(sender, messages);

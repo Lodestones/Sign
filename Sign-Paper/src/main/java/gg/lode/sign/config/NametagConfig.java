@@ -25,6 +25,13 @@ public class NametagConfig {
     private DisplayBillboard billboard;
     private Vector scale;
 
+    // Voice chat
+    private boolean voiceChatEnabled;
+    private String voiceIconSpeaking;
+    private String voiceIconIdle;
+    private String voiceIconDeafened;
+    private String voiceIconDisconnected;
+
     public NametagConfig(Sign plugin) {
         this.plugin = plugin;
     }
@@ -47,6 +54,13 @@ public class NametagConfig {
         this.background = config.getString("nametags.display.background", "default");
         this.billboard = DisplayBillboard.valueOf(config.getString("nametags.display.billboard", "center").toUpperCase());
         this.scale = parseScale(config);
+
+        // Voice chat
+        this.voiceChatEnabled = config.getBoolean("nametags.voice-chat.enabled", false);
+        this.voiceIconSpeaking = config.getString("nametags.voice-chat.icons.speaking", "🔊");
+        this.voiceIconIdle = config.getString("nametags.voice-chat.icons.idle", "🔈");
+        this.voiceIconDeafened = config.getString("nametags.voice-chat.icons.deafened", "🔇");
+        this.voiceIconDisconnected = config.getString("nametags.voice-chat.icons.disconnected", "🔌");
     }
 
     public boolean isEnabled() {
@@ -99,6 +113,26 @@ public class NametagConfig {
 
     public Vector getScale() {
         return scale;
+    }
+
+    public boolean isVoiceChatEnabled() {
+        return voiceChatEnabled;
+    }
+
+    public String getVoiceIconSpeaking() {
+        return voiceIconSpeaking;
+    }
+
+    public String getVoiceIconIdle() {
+        return voiceIconIdle;
+    }
+
+    public String getVoiceIconDeafened() {
+        return voiceIconDeafened;
+    }
+
+    public String getVoiceIconDisconnected() {
+        return voiceIconDisconnected;
     }
 
     private Vector parseScale(FileConfiguration config) {

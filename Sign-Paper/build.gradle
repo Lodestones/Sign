@@ -17,6 +17,7 @@ dependencies {
     implementation("org.bstats:bstats-bukkit:3.1.0")
     compileOnly("me.clip:placeholderapi:2.11.7")
     compileOnly("com.github.NEZNAMY:TAB-API:5.3.2")
+    compileOnly("de.maxhenkel.voicechat:voicechat-api:2.5.0")
 }
 
 tasks {
@@ -26,6 +27,7 @@ tasks {
             modrinth("VoidGen", "2.3.3")
             hangar("PlaceholderAPI", "2.11.7")
             modrinth("tab-was-taken", "5.3.2")
+            modrinth("simple-voice-chat", "bukkit-2.5.26")
         }
     }
 

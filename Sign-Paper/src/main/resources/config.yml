@@ -34,6 +34,7 @@ nametags:
     # Built-in placeholders (no extra plugin needed):
     # {player}  - Player's name
     # {health}  - Player's current health (e.g. 20)
+    # {voice}   - Voice chat status icon (requires Simple Voice Chat & voice-chat.enabled)
     lines:
       - "<gray>{player}</gray>"
       - "<red>❤ <white>{health}"
@@ -73,3 +74,18 @@ nametags:
       x: 1
       y: 1
       z: 1
+
+  # Simple Voice Chat Integration (optional)
+  # Adds the {voice} placeholder to display a player's voice chat status icon.
+  # Requires the Simple Voice Chat plugin to be installed.
+  voice-chat:
+    # Enable the {voice} placeholder. If disabled, {voice} will resolve to an empty string.
+    enabled: false
+
+    # The icons shown for each voice state.
+    # Supports MiniMessage formatting, so you can use <font:namespace:key> for custom resource pack fonts.
+    icons:
+      speaking: "🔊"
+      idle: "🔈"
+      deafened: "🔇"
+      disconnected: "🔌"

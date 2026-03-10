@@ -12,3 +12,6 @@ dependencies:
     TAB:
       required: false
       load: BEFORE
+    voicechat:
+      required: false
+      load: BEFORE
