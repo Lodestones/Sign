@@ -42,7 +42,7 @@ nametags:
     # Available values: true, false
     text-shadow: true
 
-    # Should the text display of nametags be see through?
+    # Should the text display of nametags be seen through?
     # Available values: true, false
     see-through: false
 
