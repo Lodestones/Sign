@@ -46,7 +46,7 @@ public class PacketListener extends PacketListenerAbstract {
                             nametag.hide(viewer);
                             nametag.show(viewer);
                         }
-                    }, 2L);
+                    }, 20L);
                     break;
                 }
             }
