@@ -49,6 +49,10 @@ public class Nametag implements INametag {
     // Per-viewer line overrides
     private final Map<UUID, List<String>> viewerOverrides;
 
+    // Per-viewer resolved text cache (for dirty checking)
+    private final Map<UUID, List<Component>> viewerResolvedCache;
+    private final Map<UUID, Component> viewerCondensedCache;
+
     // Condensed mode: single display
     private final ClientTextDisplay condensedDisplay;
 
@@ -65,6 +69,8 @@ public class Nametag implements INametag {
         this.viewers = new HashSet<>();
         this.inRange = new HashSet<>();
         this.viewerOverrides = new HashMap<>();
+        this.viewerResolvedCache = new HashMap<>();
+        this.viewerCondensedCache = new HashMap<>();
 
         NametagConfig config = plugin.config().getNametagConfig();
         this.lines = config.getLines();
@@ -125,7 +131,12 @@ public class Nametag implements INametag {
     public void updateVisibilityForAll() {
         viewers.removeIf((uuid) -> {
             Player viewer = Bukkit.getPlayer(uuid);
-            return viewer == null || !viewer.isOnline();
+            if (viewer == null || !viewer.isOnline()) {
+                viewerResolvedCache.remove(uuid);
+                viewerCondensedCache.remove(uuid);
+                return true;
+            }
+            return false;
         });
         inRange.removeIf((uuid) -> {
             Player viewer = Bukkit.getPlayer(uuid);
@@ -175,7 +186,29 @@ public class Nametag implements INametag {
             boolean shouldSee = shouldSee(viewer);
             boolean isVisible = this.viewers.contains(viewer.getUniqueId());
             boolean wasInRange = this.inRange.contains(viewer.getUniqueId());
-            boolean viewerDirty = dirty || hasOverride(viewer);
+
+            // Per-viewer dirty check: resolve their specific lines and compare to cache
+            boolean viewerDirty;
+            if (hasOverride(viewer)) {
+                List<String> viewerLines = getLinesForViewer(viewer);
+                if (condensed) {
+                    Component newText = getJoinedText(viewerLines);
+                    Component cached = viewerCondensedCache.get(viewer.getUniqueId());
+                    viewerDirty = !newText.equals(cached) || sneakingChanged;
+                    if (!newText.equals(cached)) {
+                        viewerCondensedCache.put(viewer.getUniqueId(), newText);
+                    }
+                } else {
+                    List<Component> resolved = resolveLines(viewerLines);
+                    List<Component> cached = viewerResolvedCache.get(viewer.getUniqueId());
+                    viewerDirty = !resolved.equals(cached) || sneakingChanged;
+                    if (!resolved.equals(cached)) {
+                        viewerResolvedCache.put(viewer.getUniqueId(), resolved);
+                    }
+                }
+            } else {
+                viewerDirty = dirty;
+            }
 
             if (shouldSee) {
                 this.inRange.add(viewer.getUniqueId());
@@ -441,11 +474,18 @@ public class Nametag implements INametag {
 
     @Override
     public void setLines(Player viewer, List<String> lines) {
+        List<String> previousLines = viewerOverrides.containsKey(viewer.getUniqueId())
+                ? viewerOverrides.get(viewer.getUniqueId()) : getLinesForViewer(viewer);
         viewerOverrides.put(viewer.getUniqueId(), List.copyOf(lines));
         if (!condensed) ensureDisplayCount(lines.size());
         if (this.viewers.contains(viewer.getUniqueId())) {
-            this.hide(viewer);
-            this.show(viewer);
+            boolean lineCountChanged = !condensed && previousLines.size() != lines.size();
+            if (lineCountChanged) {
+                this.hide(viewer);
+                this.show(viewer);
+            } else {
+                this.update(viewer);
+            }
         }
     }
 
@@ -457,10 +497,18 @@ public class Nametag implements INametag {
 
     @Override
     public void release(Player viewer) {
-        viewerOverrides.remove(viewer.getUniqueId());
+        List<String> previousOverride = viewerOverrides.remove(viewer.getUniqueId());
+        viewerResolvedCache.remove(viewer.getUniqueId());
+        viewerCondensedCache.remove(viewer.getUniqueId());
         if (this.viewers.contains(viewer.getUniqueId())) {
-            this.hide(viewer);
-            this.show(viewer);
+            List<String> currentLines = getLinesForViewer(viewer);
+            boolean lineCountChanged = !condensed && previousOverride != null && previousOverride.size() != currentLines.size();
+            if (lineCountChanged) {
+                this.hide(viewer);
+                this.show(viewer);
+            } else {
+                this.update(viewer);
+            }
         }
     }
 
