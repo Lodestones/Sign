@@ -43,9 +43,14 @@ public class PacketListener extends PacketListenerAbstract {
             if (target.equals(viewer)) continue;
             if (target.getEntityId() != entityId) continue;
 
+            // Mark that this viewer's client now has the player entity
+            nametag.markTracked(viewer.getUniqueId());
+
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (viewer.isOnline() && target.isOnline()) {
-                    nametag.show(viewer);
+                    // Uses updateVisibilityFor which checks shouldSee before showing,
+                    // preventing show at tracking range when beyond visibility distance
+                    nametag.updateVisibilityFor(viewer);
                 }
             }, 2L);
             break;
@@ -65,6 +70,9 @@ public class PacketListener extends PacketListenerAbstract {
 
             for (int id : entityIds) {
                 if (id == target.getEntityId()) {
+                    // Mark that this viewer's client no longer has the player entity
+                    nametag.markUntracked(viewer.getUniqueId());
+
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (viewer.isOnline()) {
                             nametag.hide(viewer);

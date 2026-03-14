@@ -35,6 +35,7 @@ public class Nametag implements INametag {
     private final Sign plugin;
     private final Player player;
     private final Set<UUID> viewers;
+    private final Set<UUID> tracked; // viewers whose clients have the player entity (received SPAWN_ENTITY)
 
     private final List<String> lines;
     private final boolean hideSelf;
@@ -71,6 +72,7 @@ public class Nametag implements INametag {
         this.plugin = Sign.getInstance();
         this.player = player;
         this.viewers = new HashSet<>();
+        this.tracked = new HashSet<>();
         this.viewerOverrides = new HashMap<>();
         this.viewerResolvedCache = new HashMap<>();
         this.viewerCondensedCache = new HashMap<>();
@@ -137,6 +139,7 @@ public class Nametag implements INametag {
 
     @Override
     public void updateVisibilityForAll() {
+        // Clean up offline players
         viewers.removeIf((uuid) -> {
             Player viewer = Bukkit.getPlayer(uuid);
             if (viewer == null || !viewer.isOnline()) {
@@ -147,8 +150,12 @@ public class Nametag implements INametag {
             }
             return false;
         });
+        tracked.removeIf((uuid) -> {
+            Player viewer = Bukkit.getPlayer(uuid);
+            return viewer == null || !viewer.isOnline();
+        });
 
-        if (viewers.isEmpty()) return;
+        if (tracked.isEmpty() && viewers.isEmpty()) return;
 
         boolean sneaking = player.isSneaking();
         boolean sneakingChanged = supportCrouching && sneaking != cachedSneaking;
@@ -187,43 +194,57 @@ public class Nametag implements INametag {
             setAllLocations(getHeadLocation());
         }
 
-        // Only update or hide existing viewers — spawning is driven by SPAWN_ENTITY packets
-        for (UUID viewerUuid : new HashSet<>(viewers)) {
+        // Iterate tracked viewers (clients that have the player entity).
+        // Safe to show because tracked = entity exists on that client.
+        for (UUID viewerUuid : new HashSet<>(tracked)) {
             Player viewer = Bukkit.getPlayer(viewerUuid);
             if (viewer == null || !viewer.isOnline()) continue;
 
-            if (!shouldSee(viewer)) {
+            boolean shouldSee = shouldSee(viewer);
+            boolean isVisible = this.viewers.contains(viewerUuid);
+
+            if (shouldSee && !isVisible) {
+                this.show(viewer);
+            } else if (!shouldSee && isVisible) {
                 this.hide(viewer);
-                continue;
-            }
+            } else if (isVisible) {
+                // Per-viewer dirty check using string comparison (avoids expensive parsing)
+                boolean viewerDirty;
+                if (hasOverride(viewer)) {
+                    List<String> viewerLines = getLinesForViewer(viewer);
+                    List<String> viewerStrings = resolveToStrings(viewerLines);
+                    List<String> cachedViewerStrings = viewerResolvedStringCache.get(viewerUuid);
+                    boolean viewerTextChanged = !viewerStrings.equals(cachedViewerStrings);
+                    viewerDirty = viewerTextChanged || sneakingChanged;
 
-            // Per-viewer dirty check using string comparison (avoids expensive parsing)
-            boolean viewerDirty;
-            if (hasOverride(viewer)) {
-                List<String> viewerLines = getLinesForViewer(viewer);
-                List<String> viewerStrings = resolveToStrings(viewerLines);
-                List<String> cachedViewerStrings = viewerResolvedStringCache.get(viewer.getUniqueId());
-                boolean viewerTextChanged = !viewerStrings.equals(cachedViewerStrings);
-                viewerDirty = viewerTextChanged || sneakingChanged;
+                    if (viewerTextChanged) {
+                        viewerResolvedStringCache.put(viewerUuid, viewerStrings);
+                        if (condensed) {
+                            viewerCondensedCache.put(viewerUuid, joinComponents(parseComponents(viewerStrings)));
+                        } else {
+                            viewerResolvedCache.put(viewerUuid, parseComponents(viewerStrings));
+                        }
+                    }
+                } else {
+                    viewerDirty = dirty;
+                }
 
-                if (viewerTextChanged) {
-                    viewerResolvedStringCache.put(viewer.getUniqueId(), viewerStrings);
-                    if (condensed) {
-                        Component joined = joinComponents(parseComponents(viewerStrings));
-                        viewerCondensedCache.put(viewer.getUniqueId(), joined);
+                if (viewerDirty) {
+                    if (hasOverride(viewer)) {
+                        this.update(viewer);
                     } else {
-                        viewerResolvedCache.put(viewer.getUniqueId(), parseComponents(viewerStrings));
+                        sendMetadataUpdate(viewer);
                     }
                 }
-            } else {
-                viewerDirty = dirty;
             }
+        }
 
-            if (viewerDirty) {
-                if (hasOverride(viewer)) {
-                    this.update(viewer);
-                } else {
-                    sendMetadataUpdate(viewer);
+        // Hide any viewers not in tracked (entity was destroyed but hide was missed)
+        for (UUID viewerUuid : new HashSet<>(viewers)) {
+            if (!tracked.contains(viewerUuid)) {
+                Player viewer = Bukkit.getPlayer(viewerUuid);
+                if (viewer != null && viewer.isOnline()) {
+                    this.hide(viewer);
                 }
             }
         }
@@ -237,6 +258,7 @@ public class Nametag implements INametag {
     public void showToEligible() {
         for (Player viewer : Bukkit.getOnlinePlayers()) {
             if (shouldSee(viewer) && !viewers.contains(viewer.getUniqueId())) {
+                tracked.add(viewer.getUniqueId());
                 this.show(viewer);
             }
         }
@@ -631,6 +653,22 @@ public class Nametag implements INametag {
 
     public boolean isVisibleTo(Player viewer) {
         return viewers.contains(viewer.getUniqueId());
+    }
+
+    /**
+     * Mark that a viewer's client has the player entity (received SPAWN_ENTITY).
+     * Called by the packet listener when SPAWN_ENTITY is intercepted.
+     */
+    public void markTracked(UUID viewerUuid) {
+        tracked.add(viewerUuid);
+    }
+
+    /**
+     * Mark that a viewer's client no longer has the player entity (received DESTROY_ENTITIES).
+     * Called by the packet listener when DESTROY_ENTITIES is intercepted.
+     */
+    public void markUntracked(UUID viewerUuid) {
+        tracked.remove(viewerUuid);
     }
 
     private int getBackground() {
