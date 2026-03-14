@@ -34,6 +34,7 @@ public final class Sign extends JavaPlugin implements ISign {
     private static SignConfig config;
     private NametagManager nametagManager;
     private NametagScheduler nametagScheduler;
+    private PlayerListener playerListener;
 
     @Override
     public void onLoad() {
@@ -69,7 +70,8 @@ public final class Sign extends JavaPlugin implements ISign {
         nametagScheduler.start();
 
         // Register Listeners & Commands
-        pluginManager.registerEvents(new PlayerListener(), this);
+        this.playerListener = new PlayerListener();
+        pluginManager.registerEvents(playerListener, this);
         PacketEvents.getAPI().getEventManager().registerListener(new PacketListener(this));
         new SignCommand(this).register();
 
@@ -166,5 +168,9 @@ public final class Sign extends JavaPlugin implements ISign {
 
     public NametagManager getNametagManager() {
         return nametagManager;
+    }
+
+    public PlayerListener getPlayerListener() {
+        return playerListener;
     }
 }

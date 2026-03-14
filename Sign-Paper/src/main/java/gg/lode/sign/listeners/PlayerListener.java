@@ -25,25 +25,19 @@ public class PlayerListener implements Listener {
             nametagManager.remove(player);
         }
 
-        // Delay nametag creation to ensure all clients have received entity spawn packets
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
+        nametagManager.create(player);
 
-            nametagManager.create(player);
-
-            // Also refresh existing nametags for this viewer
-            for (Nametag nametag : nametagManager.getAll()) {
-                if (nametag.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
-                nametag.updateVisibilityForAll();
-            }
-        }, 20L);
+        // Show existing nametags to this viewer
+        for (Nametag nametag : nametagManager.getAll()) {
+            if (nametag.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
+            nametag.updateVisibilityFor(player);
+        }
     }
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (plugin.config().getNametagConfig().isEnabled()) {
-            Player player = event.getPlayer();
-            nametagManager.remove(player);
+            nametagManager.remove(event.getPlayer());
         }
     }
 
@@ -63,71 +57,22 @@ public class PlayerListener implements Listener {
 
         Player player = event.getPlayer();
 
-        // Re-show this player's nametag + show other nametags to them after respawn
+        // Short delay — entity was never destroyed for other viewers, just need respawn to finish
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
 
+            // Re-show after death hid the nametag (entity still exists on viewers' clients)
             Nametag nametag = nametagManager.get(player);
             if (nametag != null) {
-                nametag.updateVisibilityForAll();
+                nametag.showToEligible();
             }
 
+            // Show existing nametags to the respawned player
             for (Nametag other : nametagManager.getAll()) {
                 if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
-                other.updateVisibilityForAll();
+                other.updateVisibilityFor(player);
             }
-        }, 5L);
-    }
-
-    @EventHandler
-    public void onPlayerTeleport(PlayerTeleportEvent event) {
-        if (!plugin.config().getNametagConfig().isEnabled()) return;
-
-        Player player = event.getPlayer();
-        Nametag nametag = nametagManager.get(player);
-        if (nametag != null) {
-            nametag.hideForAll();
-        }
-
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
-
-            Nametag n = nametagManager.get(player);
-            if (n != null) {
-                n.updateVisibilityForAll();
-            }
-
-            for (Nametag other : nametagManager.getAll()) {
-                if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
-                other.updateVisibilityForAll();
-            }
-        }, 20L);
-    }
-
-    @EventHandler
-    public void onPlayerWorldChange(PlayerChangedWorldEvent event) {
-        if (!plugin.config().getNametagConfig().isEnabled()) return;
-
-        Player player = event.getPlayer();
-        Nametag nametag = nametagManager.get(player);
-        if (nametag != null) {
-            nametag.hideForAll();
-        }
-
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            if (!player.isOnline()) return;
-
-            Nametag n = nametagManager.get(player);
-            if (n != null) {
-                n.updateVisibilityForAll();
-            }
-
-            // Also refresh other nametags for this viewer
-            for (Nametag other : nametagManager.getAll()) {
-                if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
-                other.updateVisibilityForAll();
-            }
-        }, 20L);
+        }, 2L);
     }
 
     @EventHandler
@@ -150,18 +95,21 @@ public class PlayerListener implements Listener {
         if (nametag != null) {
             if (event.getNewGameMode() == GameMode.SPECTATOR) {
                 nametag.hideForAll();
-            } else {
-                nametag.updateVisibilityForAll();
+            } else if (player.getGameMode() == GameMode.SPECTATOR) {
+                // Coming out of spectator — entity will be re-spawned for viewers via SPAWN_ENTITY,
+                // but we also explicitly show in case tracking doesn't trigger a respawn
+                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline()) nametag.showToEligible();
+                }, 2L);
             }
         }
 
-        // Recalculate all other nametags for this viewer
-        // (spectator can't see nametags, exiting spectator needs them back)
+        // Update other nametags for this viewer
         plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
             for (Nametag other : nametagManager.getAll()) {
                 if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
-                other.updateVisibilityForAll();
+                other.updateVisibilityFor(player);
             }
         }, 1L);
     }

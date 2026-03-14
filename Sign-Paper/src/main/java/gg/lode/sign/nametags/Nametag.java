@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 
 public class Nametag implements INametag {
     private static final Pattern CONDITION_PATTERN = Pattern.compile("<condition:'([^']+)'>(.+?)</condition>");
+    private static final DecimalFormat HEALTH_FORMAT = new DecimalFormat("#.##");
     private static final byte OPACITY_FULL = -1;
     private static final byte OPACITY_CROUCHING = 64;
     private static final float BASE_Y_OFFSET = 0.25f;
@@ -34,7 +35,6 @@ public class Nametag implements INametag {
     private final Sign plugin;
     private final Player player;
     private final Set<UUID> viewers;
-    private final Set<UUID> inRange;
 
     private final List<String> lines;
     private final boolean hideSelf;
@@ -53,6 +53,10 @@ public class Nametag implements INametag {
     private final Map<UUID, List<Component>> viewerResolvedCache;
     private final Map<UUID, Component> viewerCondensedCache;
 
+    // String-level caches — compared before expensive MiniMessage parsing
+    private List<String> cachedResolvedStrings;
+    private final Map<UUID, List<String>> viewerResolvedStringCache;
+
     // Condensed mode: single display
     private final ClientTextDisplay condensedDisplay;
 
@@ -67,10 +71,10 @@ public class Nametag implements INametag {
         this.plugin = Sign.getInstance();
         this.player = player;
         this.viewers = new HashSet<>();
-        this.inRange = new HashSet<>();
         this.viewerOverrides = new HashMap<>();
         this.viewerResolvedCache = new HashMap<>();
         this.viewerCondensedCache = new HashMap<>();
+        this.viewerResolvedStringCache = new HashMap<>();
 
         NametagConfig config = plugin.config().getNametagConfig();
         this.lines = config.getLines();
@@ -122,9 +126,13 @@ public class Nametag implements INametag {
 
     @Override
     public void hideForAll() {
-        for (Player viewer : Bukkit.getOnlinePlayers()) {
-            this.hide(viewer);
+        for (UUID viewerUuid : new HashSet<>(viewers)) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline()) {
+                this.hide(viewer);
+            }
         }
+        viewers.clear();
     }
 
     @Override
@@ -134,28 +142,28 @@ public class Nametag implements INametag {
             if (viewer == null || !viewer.isOnline()) {
                 viewerResolvedCache.remove(uuid);
                 viewerCondensedCache.remove(uuid);
+                viewerResolvedStringCache.remove(uuid);
                 return true;
             }
             return false;
         });
-        inRange.removeIf((uuid) -> {
-            Player viewer = Bukkit.getPlayer(uuid);
-            return viewer == null || !viewer.isOnline();
-        });
+
+        if (viewers.isEmpty()) return;
 
         boolean sneaking = player.isSneaking();
         boolean sneakingChanged = supportCrouching && sneaking != cachedSneaking;
-        boolean dirty;
+
+        // Phase 1: Cheap string-level dirty check — skip expensive MiniMessage parsing when unchanged
+        List<String> resolvedStrings = resolveToStrings(lines);
+        boolean textChanged = !resolvedStrings.equals(cachedResolvedStrings);
+        boolean dirty = textChanged || sneakingChanged;
 
         if (condensed) {
             setAllLocations(getHeadLocation());
-            Component newText = getJoinedText();
-            boolean textChanged = !newText.equals(cachedText);
-            dirty = textChanged || sneakingChanged;
-
             if (textChanged) {
-                cachedText = newText;
-                condensedDisplay.setText(newText);
+                cachedResolvedStrings = resolvedStrings;
+                cachedText = joinComponents(parseComponents(resolvedStrings));
+                condensedDisplay.setText(cachedText);
             }
             if (sneakingChanged) {
                 cachedSneaking = sneaking;
@@ -163,13 +171,10 @@ public class Nametag implements INametag {
                 condensedDisplay.setSeeThrough(sneaking ? false : seeThrough);
             }
         } else {
-            List<Component> resolvedLines = resolveLines();
-            boolean textChanged = !resolvedLines.equals(cachedLineTexts);
-            dirty = textChanged || sneakingChanged;
-
             if (textChanged) {
-                cachedLineTexts = resolvedLines;
-                applyLineTexts(resolvedLines);
+                cachedResolvedStrings = resolvedStrings;
+                cachedLineTexts = parseComponents(resolvedStrings);
+                applyLineTexts(cachedLineTexts);
             }
             if (sneakingChanged) {
                 cachedSneaking = sneaking;
@@ -182,50 +187,72 @@ public class Nametag implements INametag {
             setAllLocations(getHeadLocation());
         }
 
-        for (Player viewer : Bukkit.getOnlinePlayers()) {
-            boolean shouldSee = shouldSee(viewer);
-            boolean isVisible = this.viewers.contains(viewer.getUniqueId());
-            boolean wasInRange = this.inRange.contains(viewer.getUniqueId());
+        // Only update or hide existing viewers — spawning is driven by SPAWN_ENTITY packets
+        for (UUID viewerUuid : new HashSet<>(viewers)) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer == null || !viewer.isOnline()) continue;
 
-            // Per-viewer dirty check: resolve their specific lines and compare to cache
+            if (!shouldSee(viewer)) {
+                this.hide(viewer);
+                continue;
+            }
+
+            // Per-viewer dirty check using string comparison (avoids expensive parsing)
             boolean viewerDirty;
             if (hasOverride(viewer)) {
                 List<String> viewerLines = getLinesForViewer(viewer);
-                if (condensed) {
-                    Component newText = getJoinedText(viewerLines);
-                    Component cached = viewerCondensedCache.get(viewer.getUniqueId());
-                    viewerDirty = !newText.equals(cached) || sneakingChanged;
-                    if (!newText.equals(cached)) {
-                        viewerCondensedCache.put(viewer.getUniqueId(), newText);
-                    }
-                } else {
-                    List<Component> resolved = resolveLines(viewerLines);
-                    List<Component> cached = viewerResolvedCache.get(viewer.getUniqueId());
-                    viewerDirty = !resolved.equals(cached) || sneakingChanged;
-                    if (!resolved.equals(cached)) {
-                        viewerResolvedCache.put(viewer.getUniqueId(), resolved);
+                List<String> viewerStrings = resolveToStrings(viewerLines);
+                List<String> cachedViewerStrings = viewerResolvedStringCache.get(viewer.getUniqueId());
+                boolean viewerTextChanged = !viewerStrings.equals(cachedViewerStrings);
+                viewerDirty = viewerTextChanged || sneakingChanged;
+
+                if (viewerTextChanged) {
+                    viewerResolvedStringCache.put(viewer.getUniqueId(), viewerStrings);
+                    if (condensed) {
+                        Component joined = joinComponents(parseComponents(viewerStrings));
+                        viewerCondensedCache.put(viewer.getUniqueId(), joined);
+                    } else {
+                        viewerResolvedCache.put(viewer.getUniqueId(), parseComponents(viewerStrings));
                     }
                 }
             } else {
                 viewerDirty = dirty;
             }
 
-            if (shouldSee) {
-                this.inRange.add(viewer.getUniqueId());
-
-                if (isVisible && !wasInRange) {
-                    // Re-entered range: respawn to ensure mount is intact
-                    this.hide(viewer);
-                    this.show(viewer);
-                } else if (isVisible) {
-                    if (viewerDirty) this.update(viewer);
+            if (viewerDirty) {
+                if (hasOverride(viewer)) {
+                    this.update(viewer);
                 } else {
-                    this.show(viewer);
+                    sendMetadataUpdate(viewer);
                 }
-            } else {
-                this.inRange.remove(viewer.getUniqueId());
-                if (isVisible) this.hide(viewer);
             }
+        }
+    }
+
+    /**
+     * Shows the nametag to all eligible players who don't already see it.
+     * Only call when the player entity is guaranteed to exist on viewers' clients
+     * (e.g., after initial creation, after respawn).
+     */
+    public void showToEligible() {
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (shouldSee(viewer) && !viewers.contains(viewer.getUniqueId())) {
+                this.show(viewer);
+            }
+        }
+    }
+
+    @Override
+    public void updateVisibilityFor(Player viewer) {
+        if (viewer == null || !viewer.isOnline()) return;
+
+        boolean shouldSee = shouldSee(viewer);
+        boolean isVisible = this.viewers.contains(viewer.getUniqueId());
+
+        if (shouldSee && !isVisible) {
+            this.show(viewer);
+        } else if (!shouldSee && isVisible) {
+            this.hide(viewer);
         }
     }
 
@@ -243,6 +270,7 @@ public class Nametag implements INametag {
     public void show(Player viewer) {
         NametagHandler.hide(player, viewer);
         if (hideSelf && player.getUniqueId().equals(viewer.getUniqueId())) return;
+        if (this.viewers.contains(viewer.getUniqueId())) return;
 
         this.viewers.add(viewer.getUniqueId());
 
@@ -296,6 +324,21 @@ public class Nametag implements INametag {
         }
     }
 
+    /**
+     * Re-sends the mount packet to a viewer without respawning the display entities.
+     * Used to restore mounts after the client drops them (e.g., when the player is
+     * mounted as a passenger on another entity via GSit or player riding).
+     */
+    public void remount(Player viewer) {
+        if (!this.viewers.contains(viewer.getUniqueId())) return;
+
+        if (condensed) {
+            ClientEntity.sendBundle(viewer, List.of(condensedDisplay.createMountPacket(this.player)));
+        } else {
+            ClientEntity.sendBundle(viewer, List.of(ClientEntity.createMountPacket(this.player, lineDisplays)));
+        }
+    }
+
     @Override
     public void update(Player viewer) {
         List<String> viewerLines = getLinesForViewer(viewer);
@@ -323,6 +366,31 @@ public class Nametag implements INametag {
         }
     }
 
+    /**
+     * Sends metadata and mount packets to a viewer using the current display state.
+     * Unlike update(), this does NOT re-resolve text — used when the display already
+     * has the correct text applied (e.g., global text set by updateVisibilityForAll).
+     */
+    private void sendMetadataUpdate(Player viewer) {
+        if (condensed) {
+            condensedDisplay.setLocation(getHeadLocation());
+
+            List<PacketWrapper<?>> packets = new ArrayList<>(2);
+            packets.add(condensedDisplay.createMetadataPacket());
+            packets.add(condensedDisplay.createMountPacket(this.player));
+            ClientEntity.sendBundle(viewer, packets);
+        } else {
+            setAllLocations(getHeadLocation());
+
+            List<PacketWrapper<?>> packets = new ArrayList<>(lineDisplays.size() + 1);
+            for (ClientTextDisplay display : lineDisplays) {
+                packets.add(display.createMetadataPacket());
+            }
+            packets.add(ClientEntity.createMountPacket(this.player, lineDisplays));
+            ClientEntity.sendBundle(viewer, packets);
+        }
+    }
+
     private void ensureDisplayCount(int needed) {
         if (lineDisplays == null || needed <= lineDisplays.size()) return;
 
@@ -330,7 +398,8 @@ public class Nametag implements INametag {
         int background = getBackground();
 
         // Hide from all viewers before adding new displays
-        for (UUID viewerUuid : new HashSet<>(viewers)) {
+        Set<UUID> previousViewers = new HashSet<>(viewers);
+        for (UUID viewerUuid : previousViewers) {
             Player viewer = Bukkit.getPlayer(viewerUuid);
             if (viewer != null && viewer.isOnline()) {
                 hide(viewer);
@@ -343,8 +412,8 @@ public class Nametag implements INametag {
             lineDisplays.add(createDisplay(config, background, new Vector3f(0, y, 0)));
         }
 
-        // Re-show to all viewers
-        for (UUID viewerUuid : new HashSet<>(inRange)) {
+        // Re-show to all previous viewers
+        for (UUID viewerUuid : previousViewers) {
             Player viewer = Bukkit.getPlayer(viewerUuid);
             if (viewer != null && viewer.isOnline() && shouldSee(viewer)) {
                 show(viewer);
@@ -426,12 +495,16 @@ public class Nametag implements INametag {
         };
     }
 
-    private List<Component> resolveLines(List<String> linesToResolve) {
-        List<Component> result = new ArrayList<>(linesToResolve.size());
+    /**
+     * Resolves placeholders and conditions to raw strings (cheap).
+     * Does NOT call ComponentUtils.format() — use parseComponents() for that.
+     */
+    private List<String> resolveToStrings(List<String> linesToResolve) {
+        List<String> result = new ArrayList<>(linesToResolve.size());
         for (String line : linesToResolve) {
             String modified = line
                     .replace("{player}", player.getName())
-                    .replace("{health}", String.valueOf(new DecimalFormat("#.##").format(player.getHealth())))
+                    .replace("{health}", HEALTH_FORMAT.format(player.getHealth()))
                     .replace("{voice}", resolveVoiceIcon());
             if (DependencyHelper.isPlaceholderAPIEnabled()) {
                 modified = PlaceholderAPI.setPlaceholders(player, modified);
@@ -445,12 +518,34 @@ public class Nametag implements INametag {
                 matcher.appendReplacement(sb, conditionValue.equalsIgnoreCase("true") ? Matcher.quoteReplacement(content) : "");
             }
             matcher.appendTail(sb);
-            modified = sb.toString();
+            result.add(sb.toString());
+        }
+        return result;
+    }
 
-            Component component = ComponentUtils.format(modified);
+    /**
+     * Parses resolved strings into Components via MiniMessage (expensive).
+     * Only call when the resolved strings have actually changed.
+     */
+    private List<Component> parseComponents(List<String> resolvedStrings) {
+        List<Component> result = new ArrayList<>(resolvedStrings.size());
+        for (String s : resolvedStrings) {
+            Component component = ComponentUtils.format(s);
             result.add(ComponentUtils.isBlank(component) ? null : component);
         }
         return result;
+    }
+
+    private List<Component> resolveLines(List<String> linesToResolve) {
+        return parseComponents(resolveToStrings(linesToResolve));
+    }
+
+    private Component joinComponents(List<Component> components) {
+        List<Component> nonNull = new ArrayList<>();
+        for (Component c : components) {
+            if (c != null) nonNull.add(c);
+        }
+        return ComponentUtils.join(nonNull);
     }
 
     private Component getJoinedText() {
@@ -458,16 +553,13 @@ public class Nametag implements INametag {
     }
 
     private Component getJoinedText(List<String> linesToResolve) {
-        List<Component> components = new ArrayList<>(linesToResolve.size());
-        for (Component resolved : resolveLines(linesToResolve)) {
-            if (resolved != null) components.add(resolved);
-        }
-        return ComponentUtils.join(components);
+        return joinComponents(resolveLines(linesToResolve));
     }
 
     @Override
     public void setLines(List<String> lines) {
         this.globalOverride = List.copyOf(lines);
+        this.cachedResolvedStrings = null; // Invalidate string cache
         if (!condensed) ensureDisplayCount(lines.size());
         updateVisibilityForAll();
     }
@@ -477,6 +569,7 @@ public class Nametag implements INametag {
         List<String> previousLines = viewerOverrides.containsKey(viewer.getUniqueId())
                 ? viewerOverrides.get(viewer.getUniqueId()) : getLinesForViewer(viewer);
         viewerOverrides.put(viewer.getUniqueId(), List.copyOf(lines));
+        viewerResolvedStringCache.remove(viewer.getUniqueId()); // Invalidate viewer string cache
         if (!condensed) ensureDisplayCount(lines.size());
         if (this.viewers.contains(viewer.getUniqueId())) {
             boolean lineCountChanged = !condensed && previousLines.size() != lines.size();
@@ -492,6 +585,7 @@ public class Nametag implements INametag {
     @Override
     public void release() {
         this.globalOverride = null;
+        this.cachedResolvedStrings = null; // Invalidate string cache
         updateVisibilityForAll();
     }
 
@@ -500,6 +594,7 @@ public class Nametag implements INametag {
         List<String> previousOverride = viewerOverrides.remove(viewer.getUniqueId());
         viewerResolvedCache.remove(viewer.getUniqueId());
         viewerCondensedCache.remove(viewer.getUniqueId());
+        viewerResolvedStringCache.remove(viewer.getUniqueId());
         if (this.viewers.contains(viewer.getUniqueId())) {
             List<String> currentLines = getLinesForViewer(viewer);
             boolean lineCountChanged = !condensed && previousOverride != null && previousOverride.size() != currentLines.size();

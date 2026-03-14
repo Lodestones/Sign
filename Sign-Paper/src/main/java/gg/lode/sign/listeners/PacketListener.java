@@ -5,6 +5,7 @@ import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPassengers;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
 import gg.lode.sign.Sign;
 import gg.lode.sign.nametags.Nametag;
 import org.bukkit.Bukkit;
@@ -21,10 +22,33 @@ public class PacketListener extends PacketListenerAbstract {
     public void onPacketSend(PacketSendEvent event) {
         if (!plugin.config().getNametagConfig().isEnabled()) return;
 
-        if (event.getPacketType() == PacketType.Play.Server.DESTROY_ENTITIES) {
+        if (event.getPacketType() == PacketType.Play.Server.SPAWN_ENTITY) {
+            handleSpawnEntity(event);
+        } else if (event.getPacketType() == PacketType.Play.Server.DESTROY_ENTITIES) {
             handleDestroyEntities(event);
         } else if (event.getPacketType() == PacketType.Play.Server.SET_PASSENGERS) {
             handleSetPassengers(event);
+        }
+    }
+
+    private void handleSpawnEntity(PacketSendEvent event) {
+        Player viewer = (Player) event.getPlayer();
+        if (viewer == null) return;
+
+        WrapperPlayServerSpawnEntity packet = new WrapperPlayServerSpawnEntity(event);
+        int entityId = packet.getEntityId();
+
+        for (Nametag nametag : plugin.getNametagManager().getAll()) {
+            Player target = nametag.getPlayer();
+            if (target.equals(viewer)) continue;
+            if (target.getEntityId() != entityId) continue;
+
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (viewer.isOnline() && target.isOnline()) {
+                    nametag.show(viewer);
+                }
+            }, 2L);
+            break;
         }
     }
 
@@ -41,12 +65,11 @@ public class PacketListener extends PacketListenerAbstract {
 
             for (int id : entityIds) {
                 if (id == target.getEntityId()) {
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (viewer.isOnline() && target.isOnline()) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (viewer.isOnline()) {
                             nametag.hide(viewer);
-                            nametag.show(viewer);
                         }
-                    }, 20L);
+                    });
                     break;
                 }
             }
@@ -59,37 +82,53 @@ public class PacketListener extends PacketListenerAbstract {
 
         WrapperPlayServerSetPassengers packet = new WrapperPlayServerSetPassengers(event);
         int vehicleId = packet.getEntityId();
+        int[] serverPassengers = packet.getPassengers();
 
-        // Find the nametag whose player entity matches this vehicle ID
+        boolean vehicleHandled = false;
+
         for (Nametag nametag : plugin.getNametagManager().getAll()) {
             Player target = nametag.getPlayer();
-            if (target.getEntityId() != vehicleId) continue;
             if (!nametag.isVisibleTo(viewer)) continue;
 
-            // Merge our display entity IDs into the passenger list
-            int[] serverPassengers = packet.getPassengers();
-            int[] displayIds = nametag.getDisplayEntityIds();
+            // Case 1: Vehicle is the nametag player — merge our display IDs into the passenger list
+            if (!vehicleHandled && target.getEntityId() == vehicleId) {
+                vehicleHandled = true;
 
-            // Check if our IDs are already present (avoid duplicates from our own mount packets)
-            boolean alreadyPresent = false;
-            for (int displayId : displayIds) {
-                for (int serverId : serverPassengers) {
-                    if (serverId == displayId) {
-                        alreadyPresent = true;
-                        break;
+                int[] displayIds = nametag.getDisplayEntityIds();
+
+                boolean alreadyPresent = false;
+                for (int displayId : displayIds) {
+                    for (int serverId : serverPassengers) {
+                        if (serverId == displayId) {
+                            alreadyPresent = true;
+                            break;
+                        }
                     }
+                    if (alreadyPresent) break;
                 }
-                if (alreadyPresent) break;
+
+                if (!alreadyPresent) {
+                    int[] merged = new int[serverPassengers.length + displayIds.length];
+                    System.arraycopy(serverPassengers, 0, merged, 0, serverPassengers.length);
+                    System.arraycopy(displayIds, 0, merged, serverPassengers.length, displayIds.length);
+                    packet.setPassengers(merged);
+                    serverPassengers = merged;
+                }
+                continue;
             }
-            if (alreadyPresent) break;
 
-            // Merge: server passengers + our display entities
-            int[] merged = new int[serverPassengers.length + displayIds.length];
-            System.arraycopy(serverPassengers, 0, merged, 0, serverPassengers.length);
-            System.arraycopy(displayIds, 0, merged, serverPassengers.length, displayIds.length);
-            packet.setPassengers(merged);
-
-            break;
+            // Case 2: Nametag player appears as a passenger (e.g., GSit sit/lay/crawl, riding another player)
+            // The client can drop sub-passengers when mounting, so re-send our mount packet after a delay
+            for (int passengerId : serverPassengers) {
+                if (target.getEntityId() == passengerId) {
+                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                        if (viewer.isOnline() && target.isOnline()) {
+                            nametag.remount(viewer);
+                        }
+                    }, 2L);
+                    break;
+                }
+            }
         }
     }
 }
