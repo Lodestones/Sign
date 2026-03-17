@@ -22,12 +22,14 @@ public class PlayerListener implements Listener {
         if (!plugin.config().getNametagConfig().isEnabled()) return;
 
         if (nametagManager.get(player) != null) {
-            nametagManager.remove(player);
+            // World/dimension change — nametag persists, DESTROY/SPAWN packets handle visibility
+            return;
         }
 
+        // Initial join — create nametag and show to nearby viewers
         nametagManager.create(player);
 
-        // Show existing nametags to this viewer
+        // Show existing nametags to this viewer (entities already loaded on client)
         for (Nametag nametag : nametagManager.getAll()) {
             if (nametag.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
             nametag.updateVisibilityFor(player);

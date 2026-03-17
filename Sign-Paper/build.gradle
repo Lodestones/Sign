@@ -8,12 +8,12 @@ plugins {
 
 dependencies {
     implementation(project(":Sign-API"))
-    compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
     implementation("net.kyori:adventure-api:4.25.0")
     implementation("net.kyori:adventure-text-minimessage:4.25.0")
     implementation("net.kyori:adventure-text-serializer-legacy:4.25.0")
     implementation("dev.jorel:commandapi-paper-shade:11.1.0")
-    implementation("com.github.retrooper:packetevents-spigot:2.10.1")
+    implementation("com.github.retrooper:packetevents-spigot:2.11.2")
     implementation("org.bstats:bstats-bukkit:3.1.0")
     compileOnly("me.clip:placeholderapi:2.11.7")
     compileOnly("com.github.NEZNAMY:TAB-API:5.3.2")
