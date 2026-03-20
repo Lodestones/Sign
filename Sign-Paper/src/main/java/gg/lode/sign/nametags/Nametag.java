@@ -21,6 +21,7 @@ import org.bukkit.entity.Player;
 
 import java.text.DecimalFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -71,8 +72,8 @@ public class Nametag implements INametag {
     public Nametag(Player player) {
         this.plugin = Sign.getInstance();
         this.player = player;
-        this.viewers = new HashSet<>();
-        this.tracked = new HashSet<>();
+        this.viewers = ConcurrentHashMap.newKeySet();
+        this.tracked = ConcurrentHashMap.newKeySet();
         this.viewerOverrides = new HashMap<>();
         this.viewerResolvedCache = new HashMap<>();
         this.viewerCondensedCache = new HashMap<>();
