@@ -1,0 +1,277 @@
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
+import xyz.jpenilla.runtask.task.AbstractRun
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.SecureRandom
+import java.security.Signature
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+plugins {
+    id 'xyz.jpenilla.run-paper'
+    id 'com.gradleup.shadow'
+}
+
+group = 'gg.lode'
+version = rootProject.version
+
+// Dev builds bypass release-channel gating by tagging the blob as alpha and
+// embedding a git SHA in the version so each upload is unique. Loaders with
+// `loader_channels: release,alpha` pick it up; production loaders never do.
+def isReleaseDev = gradle.startParameter.taskNames.any { it == 'releaseDev' || it.endsWith(':releaseDev') }
+if (isReleaseDev) {
+    def shaProc = ['git', 'rev-parse', '--short', 'HEAD'].execute(null, rootDir)
+    shaProc.waitFor()
+    def sha = shaProc.text.trim() ?: 'unknown'
+    def dirtyProc = ['git', 'diff', '--quiet'].execute(null, rootDir)
+    dirtyProc.waitFor()
+    def dirty = dirtyProc.exitValue() != 0
+    version = "${rootProject.version}-dev.${sha}${dirty ? '.dirty' : ''}"
+    logger.lifecycle("Dev build version: {}", version)
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+dependencies {
+    implementation(project(":Sign-API"))
+    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    implementation("net.kyori:adventure-api:4.25.0")
+    implementation("net.kyori:adventure-text-minimessage:4.25.0")
+    implementation("net.kyori:adventure-text-serializer-legacy:4.25.0")
+    implementation("dev.jorel:commandapi-paper-shade:11.1.0")
+    implementation("com.github.retrooper:packetevents-spigot:2.12.0")
+    implementation("org.bstats:bstats-bukkit:3.1.0")
+    compileOnly("me.clip:placeholderapi:2.11.7")
+    compileOnly("com.github.NEZNAMY:TAB-API:5.3.2")
+    compileOnly("de.maxhenkel.voicechat:voicechat-api:2.5.0")
+    compileOnly("gg.lode:Amplifier-API:1.0.13")
+}
+
+processResources {
+    inputs.property("version", version)
+    filteringCharset 'UTF-8'
+    filesMatching('paper-plugin.yml') {
+        expand("version": version)
+    }
+}
+
+// ${VERSION} placeholder substitution in source so Sign.java can carry its
+// impl version without a runtime plugin.yml lookup (live plugin.yml belongs
+// to the loader, not this jar).
+task processJavaSources(type: Copy) {
+    inputs.property("version", version)
+    from "src/main/java"
+    into "$buildDir/generated-sources/java"
+    filter { line -> line.replace('${VERSION}', "${version}") }
+}
+
+sourceSets.main.java.srcDirs = ["$buildDir/generated-sources/java"]
+compileJava.dependsOn processJavaSources
+
+tasks.withType(AbstractRun.class).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        vendor = JvmVendorSpec.JETBRAINS
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    jvmArgs("-XX:+AllowEnhancedClassRedefinition")
+}
+
+tasks.named('runServer').configure {
+    minecraftVersion("1.21.10")
+    downloadPlugins {
+        modrinth("VoidGen", "2.3.3")
+        hangar("PlaceholderAPI", "2.11.7")
+        modrinth("tab-was-taken", "5.3.2")
+        modrinth("simple-voice-chat", "bukkit-2.5.26")
+    }
+}
+
+shadowJar {
+    archiveBaseName.set('Sign-Impl')
+    archiveVersion.set("${version}")
+    archiveClassifier.set('')
+    from(project(":Sign-API").sourceSets.main.output)
+    manifest {
+        attributes('paperweight-mappings-namespace': 'mojang')
+    }
+    relocate('dev.jorel.commandapi', 'dev.jorel.commandapi.sign')
+    relocate('com.github.retrooper.packetevents', 'com.github.retrooper.packetevents.sign')
+    relocate('io.github.retrooper.packetevents', 'io.github.retrooper.packetevents.sign')
+    relocate('org.bstats', 'gg.lode.sign.bstats')
+}
+
+jar {
+    archiveBaseName.set('Sign-Impl')
+    archiveVersion.set("${version}")
+    archiveClassifier.set('slim')
+}
+
+tasks.build.dependsOn(tasks.shadowJar)
+
+// ─────────────────────────────────────────────────────────────────────────
+// Cloud-loader blob pipeline
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Blob format (all integers big-endian):
+//   magic        8 bytes   "SGBLOB\0\0"
+//   version      4 bytes   format version (1)
+//   nonce       12 bytes   AES-GCM nonce
+//   ctLen        4 bytes   ciphertext length (incl. GCM tag)
+//   ciphertext  ctLen      AES-256-GCM(impl jar bytes)
+//   sigLen       4 bytes   Ed25519 signature length (always 64)
+//   signature   64 bytes   Ed25519 over [magic..ciphertext]
+
+def cloudKeyDir = file("$rootDir/.cloud-keys")
+def cloudAesKeyFile = new File(cloudKeyDir, "aes.key")
+def cloudEdPrivKeyFile = new File(cloudKeyDir, "ed25519-private.key")
+def cloudEdPubKeyFile = new File(cloudKeyDir, "ed25519-public.key")
+def cloudLoaderTokenFile = new File(cloudKeyDir, "loader-token.key")
+
+task generateKeys {
+    description = "Generate AES-256 + Ed25519 keys + loader request token for the cloud-loader blob, if missing."
+    outputs.file cloudAesKeyFile
+    outputs.file cloudEdPrivKeyFile
+    outputs.file cloudEdPubKeyFile
+    outputs.file cloudLoaderTokenFile
+    doLast {
+        cloudKeyDir.mkdirs()
+        if (!cloudAesKeyFile.exists() || !cloudEdPrivKeyFile.exists() || !cloudEdPubKeyFile.exists()) {
+            KeyGenerator kg = KeyGenerator.getInstance("AES")
+            kg.init(256, new SecureRandom())
+            cloudAesKeyFile.bytes = kg.generateKey().encoded
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("Ed25519")
+            KeyPair kp = kpg.generateKeyPair()
+            cloudEdPrivKeyFile.bytes = kp.private.encoded
+            cloudEdPubKeyFile.bytes = kp.public.encoded
+            logger.lifecycle("Generated cloud-loader keys in {}", cloudKeyDir)
+        }
+        if (!cloudLoaderTokenFile.exists()) {
+            byte[] tokenBytes = new byte[32]
+            new SecureRandom().nextBytes(tokenBytes)
+            String tokenHex = tokenBytes.encodeHex().toString()
+            cloudLoaderTokenFile.text = tokenHex
+            logger.lifecycle("Generated loader-token.key. SIGN_LOADER_TOKEN={}", tokenHex)
+        }
+    }
+}
+
+task encryptImpl(dependsOn: [shadowJar, generateKeys]) {
+    description = "Sign + encrypt the impl shadow jar to a .bin blob the loader consumes."
+    File outFile = layout.buildDirectory.file("libs/impl-${version}.bin").get().asFile
+    inputs.files shadowJar.archiveFile
+    inputs.file cloudAesKeyFile
+    inputs.file cloudEdPrivKeyFile
+    outputs.file outFile
+    doLast {
+        byte[] aesKey = cloudAesKeyFile.bytes
+        byte[] edPrivBytes = cloudEdPrivKeyFile.bytes
+        byte[] jarBytes = shadowJar.archiveFile.get().asFile.bytes
+        byte[] nonce = new byte[12]
+        new SecureRandom().nextBytes(nonce)
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(aesKey, "AES"), new GCMParameterSpec(128, nonce))
+        byte[] ciphertext = cipher.doFinal(jarBytes)
+        byte[] magic = "SGBLOB\0\0".getBytes("UTF-8")
+        ByteBuffer header = ByteBuffer.allocate(magic.length + 4 + nonce.length + 4 + ciphertext.length).order(ByteOrder.BIG_ENDIAN)
+        header.put(magic).putInt(1).put(nonce).putInt(ciphertext.length).put(ciphertext)
+        byte[] signed = header.array()
+        java.security.spec.PKCS8EncodedKeySpec privSpec = new java.security.spec.PKCS8EncodedKeySpec(edPrivBytes)
+        java.security.PrivateKey edPriv = java.security.KeyFactory.getInstance("Ed25519").generatePrivate(privSpec)
+        Signature sig = Signature.getInstance("Ed25519")
+        sig.initSign(edPriv); sig.update(signed)
+        byte[] signature = sig.sign()
+        if (signature.length != 64) throw new GradleException("Unexpected Ed25519 signature length: " + signature.length)
+        ByteBuffer out = ByteBuffer.allocate(signed.length + 4 + signature.length).order(ByteOrder.BIG_ENDIAN)
+        out.put(signed).putInt(signature.length).put(signature)
+        outFile.parentFile.mkdirs()
+        outFile.bytes = out.array()
+        logger.lifecycle("Wrote signed/encrypted impl blob: {} ({} bytes)", outFile, outFile.length())
+    }
+}
+
+task releaseImpl(dependsOn: encryptImpl) {
+    description = "Build, sign and publish the impl blob to the lode.gg dashboard, then activate it."
+    doLast {
+        publishBlob(project, version.toString(), "release")
+    }
+}
+
+task releaseDev(dependsOn: encryptImpl) {
+    description = "Build + upload an alpha-channel dev blob (git-SHA-versioned) and activate it."
+    doLast {
+        publishBlob(project, version.toString(), "alpha")
+    }
+}
+
+ext.publishBlob = { proj, versionStr, channel ->
+    String token = (proj.findProperty("releaseToken") ?: System.getenv("SIGN_RELEASE_TOKEN")) as String
+    if (!token) throw new GradleException("Missing SIGN_RELEASE_TOKEN env var (or -PreleaseToken=<jwt>).")
+    String baseUrl = ((proj.findProperty("releaseUrl") ?: System.getenv("SIGN_RELEASE_URL")) ?: "https://lode.gg") as String
+    baseUrl = baseUrl.replaceAll('/+$', '')
+
+    File blob = proj.layout.buildDirectory.file("libs/impl-${versionStr}.bin").get().asFile
+    if (!blob.exists()) throw new GradleException("Blob not built: " + blob)
+    byte[] blobBytes = blob.bytes
+
+    String boundary = "----SignRelease" + System.currentTimeMillis()
+    ByteArrayOutputStream body = new ByteArrayOutputStream()
+    String CRLF = "\r\n"
+    body.write(("--" + boundary + CRLF).getBytes("UTF-8"))
+    body.write(('Content-Disposition: form-data; name="version"' + CRLF + CRLF).getBytes("UTF-8"))
+    body.write((versionStr + CRLF).getBytes("UTF-8"))
+    body.write(("--" + boundary + CRLF).getBytes("UTF-8"))
+    body.write(('Content-Disposition: form-data; name="blob"; filename="' + blob.name + '"' + CRLF).getBytes("UTF-8"))
+    body.write(("Content-Type: application/octet-stream" + CRLF + CRLF).getBytes("UTF-8"))
+    body.write(blobBytes)
+    body.write((CRLF + "--" + boundary + "--" + CRLF).getBytes("UTF-8"))
+    byte[] payload = body.toByteArray()
+
+    URL uploadUrl = new URL(baseUrl + "/api/admin/plugins/sign/impl/upload")
+    proj.logger.lifecycle("Uploading {} ({} bytes) to {}", blob.name, blobBytes.length, uploadUrl)
+    HttpURLConnection up = (HttpURLConnection) uploadUrl.openConnection()
+    up.setRequestMethod("POST"); up.setDoOutput(true)
+    up.setConnectTimeout(15_000); up.setReadTimeout(120_000)
+    up.setRequestProperty("Authorization", "Bearer " + token)
+    up.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary)
+    up.setFixedLengthStreamingMode(payload.length)
+    up.outputStream.withCloseable { it.write(payload) }
+    int upCode = up.responseCode
+    String upBody = (upCode >= 200 && upCode < 300 ? up.inputStream : up.errorStream)?.text ?: ""
+    if (upCode < 200 || upCode >= 300) throw new GradleException("Upload failed (HTTP " + upCode + "): " + upBody)
+    proj.logger.lifecycle("Uploaded.")
+
+    if (channel != "release") {
+        java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient()
+        java.net.http.HttpRequest patchReq = java.net.http.HttpRequest.newBuilder(
+                java.net.URI.create(baseUrl + "/api/admin/plugins/sign/impl/" + versionStr + "/metadata"))
+                .timeout(java.time.Duration.ofSeconds(30))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .method("PATCH", java.net.http.HttpRequest.BodyPublishers.ofString('{"releaseChannel":"' + channel + '"}'))
+                .build()
+        java.net.http.HttpResponse<String> patchResp = httpClient.send(patchReq, java.net.http.HttpResponse.BodyHandlers.ofString())
+        if (patchResp.statusCode() < 200 || patchResp.statusCode() >= 300) {
+            throw new GradleException("Channel PATCH failed (HTTP " + patchResp.statusCode() + "): " + patchResp.body())
+        }
+        proj.logger.lifecycle("Tagged channel={}.", channel)
+    }
+
+    URL actUrl = new URL(baseUrl + "/api/admin/plugins/sign/impl/activate")
+    HttpURLConnection act = (HttpURLConnection) actUrl.openConnection()
+    act.setRequestMethod("POST"); act.setDoOutput(true)
+    act.setConnectTimeout(15_000); act.setReadTimeout(30_000)
+    act.setRequestProperty("Authorization", "Bearer " + token)
+    act.setRequestProperty("Content-Type", "application/json")
+    byte[] actBody = ('{"version":"' + versionStr + '"}').getBytes("UTF-8")
+    act.setFixedLengthStreamingMode(actBody.length)
+    act.outputStream.withCloseable { it.write(actBody) }
+    int actCode = act.responseCode
+    String actRespBody = (actCode >= 200 && actCode < 300 ? act.inputStream : act.errorStream)?.text ?: ""
+    if (actCode < 200 || actCode >= 300) throw new GradleException("Activate failed (HTTP " + actCode + "): " + actRespBody)
+    proj.logger.lifecycle("Activated {} on channel={}. {}", versionStr, channel, actRespBody)
+}

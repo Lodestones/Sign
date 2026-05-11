@@ -11,4 +11,5 @@ plugins {
 rootProject.name = 'Sign'
 
 include 'Sign-API'
-include 'Sign-Paper'
+include 'Sign-Impl'
+include 'Sign-Loader'

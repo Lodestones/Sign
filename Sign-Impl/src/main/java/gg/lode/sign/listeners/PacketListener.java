@@ -46,7 +46,7 @@ public class PacketListener extends PacketListenerAbstract {
             // Mark that this viewer's client now has the player entity
             nametag.markTracked(viewer.getUniqueId());
 
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            Bukkit.getScheduler().runTaskLater(plugin.host(), () -> {
                 if (viewer.isOnline() && target.isOnline()) {
                     // Uses updateVisibilityFor which checks shouldSee before showing,
                     // preventing show at tracking range when beyond visibility distance
@@ -73,7 +73,7 @@ public class PacketListener extends PacketListenerAbstract {
                     // Mark that this viewer's client no longer has the player entity
                     nametag.markUntracked(viewer.getUniqueId());
 
-                    Bukkit.getScheduler().runTask(plugin, () -> {
+                    Bukkit.getScheduler().runTask(plugin.host(), () -> {
                         if (viewer.isOnline()) {
                             nametag.hide(viewer);
                         }
@@ -129,7 +129,7 @@ public class PacketListener extends PacketListenerAbstract {
             // The client can drop sub-passengers when mounting, so re-send our mount packet after a delay
             for (int passengerId : serverPassengers) {
                 if (target.getEntityId() == passengerId) {
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    Bukkit.getScheduler().runTaskLater(plugin.host(), () -> {
                         if (viewer.isOnline() && target.isOnline()) {
                             nametag.remount(viewer);
                         }

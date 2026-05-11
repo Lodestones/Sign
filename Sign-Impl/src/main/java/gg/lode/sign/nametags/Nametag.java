@@ -249,6 +249,17 @@ public class Nametag implements INametag {
                 }
             }
         }
+
+        // Catch players in range but not tracked (missed SPAWN_ENTITY, re-entered vicinity)
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (viewer.equals(player)) continue;
+            if (tracked.contains(viewer.getUniqueId())) continue;
+            if (viewers.contains(viewer.getUniqueId())) continue;
+            if (shouldSee(viewer)) {
+                tracked.add(viewer.getUniqueId());
+                this.show(viewer);
+            }
+        }
     }
 
     /**
@@ -272,7 +283,7 @@ public class Nametag implements INametag {
         boolean shouldSee = shouldSee(viewer);
         boolean isVisible = this.viewers.contains(viewer.getUniqueId());
 
-        if (shouldSee && !isVisible) {
+        if (shouldSee && !isVisible && tracked.contains(viewer.getUniqueId())) {
             this.show(viewer);
         } else if (!shouldSee && isVisible) {
             this.hide(viewer);
@@ -359,6 +370,19 @@ public class Nametag implements INametag {
             ClientEntity.sendBundle(viewer, List.of(condensedDisplay.createMountPacket(this.player)));
         } else {
             ClientEntity.sendBundle(viewer, List.of(ClientEntity.createMountPacket(this.player, lineDisplays)));
+        }
+    }
+
+    /**
+     * Re-sends mount packets to all current viewers.
+     * Lightweight heartbeat to recover from client-side mount drops.
+     */
+    public void remountAll() {
+        for (UUID viewerUuid : viewers) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline()) {
+                remount(viewer);
+            }
         }
     }
 
