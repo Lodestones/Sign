@@ -19,7 +19,7 @@ public class SignCommand extends CommandAPICommand {
 
         withSubcommand(new CommandAPICommand("version")
                 .executes((sender, args) -> {
-                    MessageHelper.send(sender, "This server is running <yellow>Sign v" + plugin.getPluginMeta().getVersion() + "<white>!");
+                    MessageHelper.send(sender, "This server is running <yellow>Sign v" + Sign.VERSION + "<white>!");
                     MessageHelper.send(sender, "Run <yellow>'/sign help' <white>for a full list of commands.");
                 }));
 
