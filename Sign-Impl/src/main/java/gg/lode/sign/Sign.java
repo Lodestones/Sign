@@ -15,7 +15,6 @@ import gg.lode.sign.listeners.PacketListener;
 import gg.lode.sign.listeners.PlayerListener;
 import gg.lode.sign.nametags.NametagManager;
 import gg.lode.sign.nametags.NametagScheduler;
-import gg.lode.sign.utils.VersionUpdater;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
@@ -99,10 +98,6 @@ public final class Sign implements ISign, SignBootstrap {
             }
         }
         NametagHandler.load();
-
-        VersionUpdater versionUpdater = new VersionUpdater(host, "Sign", "https://lode.gg/plugin/sign",
-                "https://lode.gg/api/plugins/sign/version", VERSION);
-        pluginManager.registerEvents(versionUpdater, host);
 
         getLogger().info(String.format("Sign v%s has been enabled.", VERSION));
     }
