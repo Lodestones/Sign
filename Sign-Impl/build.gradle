@@ -241,7 +241,8 @@ ext.publishBlob = { proj, versionStr, channel ->
     up.setFixedLengthStreamingMode(payload.length)
     up.outputStream.withCloseable { it.write(payload) }
     int upCode = up.responseCode
-    String upBody = (upCode >= 200 && upCode < 300 ? up.inputStream : up.errorStream)?.text ?: ""
+    InputStream upStream = (upCode >= 200 && upCode < 300) ? up.inputStream : up.errorStream
+    String upBody = upStream != null ? new String(upStream.readAllBytes(), "UTF-8") : ""
     if (upCode < 200 || upCode >= 300) throw new GradleException("Upload failed (HTTP " + upCode + "): " + upBody)
     proj.logger.lifecycle("Uploaded.")
 
@@ -271,7 +272,8 @@ ext.publishBlob = { proj, versionStr, channel ->
     act.setFixedLengthStreamingMode(actBody.length)
     act.outputStream.withCloseable { it.write(actBody) }
     int actCode = act.responseCode
-    String actRespBody = (actCode >= 200 && actCode < 300 ? act.inputStream : act.errorStream)?.text ?: ""
+    InputStream actStream = (actCode >= 200 && actCode < 300) ? act.inputStream : act.errorStream
+    String actRespBody = actStream != null ? new String(actStream.readAllBytes(), "UTF-8") : ""
     if (actCode < 200 || actCode >= 300) throw new GradleException("Activate failed (HTTP " + actCode + "): " + actRespBody)
     proj.logger.lifecycle("Activated {} on channel={}. {}", versionStr, channel, actRespBody)
 }

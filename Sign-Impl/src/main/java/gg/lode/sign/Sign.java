@@ -26,7 +26,9 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -65,7 +67,7 @@ public final class Sign implements ISign, SignBootstrap {
 
         CommandAPI.onLoad(new CommandAPIPaperConfig(host).silentLogs(true));
 
-        host.saveDefaultConfig();
+        saveDefaultConfig();
         migrateConfig();
         config = new SignConfig(this);
         config.load();
@@ -130,6 +132,25 @@ public final class Sign implements ISign, SignBootstrap {
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "Failed to reload plugin: " + e.getMessage(), e);
             return false;
+        }
+    }
+
+    /**
+     * Copy the impl jar's bundled config.yml into the data folder if absent.
+     * Replaces host.saveDefaultConfig() — the loader jar bundles only loader.yml,
+     * so the host plugin can't resolve config.yml as an embedded resource.
+     */
+    private void saveDefaultConfig() {
+        File cfg = new File(getDataFolder(), "config.yml");
+        if (cfg.exists()) return;
+        if (!getDataFolder().exists() && !getDataFolder().mkdirs()) {
+            throw new IllegalStateException("Could not create data folder: " + getDataFolder());
+        }
+        try (InputStream in = getClass().getResourceAsStream("/config.yml")) {
+            if (in == null) throw new IllegalStateException("Bundled config.yml missing from impl jar");
+            Files.copy(in, cfg.toPath());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to save default config.yml", e);
         }
     }
 
