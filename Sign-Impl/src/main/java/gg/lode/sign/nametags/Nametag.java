@@ -12,9 +12,12 @@ import gg.lode.sign.utils.ComponentUtils;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
+import gg.lode.sign.utils.hooks.NexoHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import gg.lode.bookshelfapi.api.util.MiniMessageHelper;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -606,12 +609,19 @@ public class Nametag implements INametag {
 
     /**
      * Renders the final resolved line (after PlaceholderAPI recursion) to a
-     * Component via MiniMessageHelper. Legacy color/style codes using either
-     * {@code &} or {@code §} are translated to MiniMessage first; literals such
-     * as {@code $} are not color codes and pass through untouched.
+     * Component. Legacy color/style codes using either {@code &} or {@code §}
+     * are translated to MiniMessage first; literals such as {@code $} are not
+     * color codes and pass through untouched. When Nexo is installed, its
+     * {@code <glyph:id>} tags are resolved via the player-aware resolver;
+     * otherwise the standard MiniMessageHelper path is used.
      */
     private Component toComponent(String input) {
-        return MiniMessageHelper.deserialize(MiniMessageHelper.convertAmpersandToMiniMessage(input));
+        String converted = MiniMessageHelper.convertAmpersandToMiniMessage(input);
+        TagResolver glyphResolver = NexoHook.glyphResolver();
+        if (glyphResolver != null) {
+            return MiniMessage.miniMessage().deserialize(converted, glyphResolver);
+        }
+        return MiniMessageHelper.deserialize(converted);
     }
 
     private List<Component> resolveLines(List<String> linesToResolve) {
