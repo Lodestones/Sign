@@ -4,7 +4,7 @@
 # This is the configuration file for Sign.
 # To apply any changes you make here, run: /sign reload
 # Wiki: https://docs.lode.gg/sign/server-owners/overview
-version: 1
+version: 2
 
 nametags:
   # Enable the nametags.
@@ -38,6 +38,13 @@ nametags:
     lines:
       - "<gray>{player}</gray>"
       - "<red>❤ <white>{health}"
+
+    # How many times to recursively resolve PlaceholderAPI placeholders.
+    # Some placeholders expand to a value that itself contains another placeholder
+    # (e.g. %luckperms_prefix% returning text with %another_papi% inside).
+    # Each pass re-resolves until the text stops changing or this limit is hit.
+    # Set to 1 to disable recursion. Recommended: 5
+    placeholder-depth: 5
 
     # Enable text shadow for the text display of a nametag.
     # Available values: true, false

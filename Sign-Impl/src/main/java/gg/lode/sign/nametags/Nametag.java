@@ -554,7 +554,7 @@ public class Nametag implements INametag {
                     .replace("{health}", HEALTH_FORMAT.format(player.getHealth()))
                     .replace("{voice}", resolveVoiceIcon());
             if (DependencyHelper.isPlaceholderAPIEnabled()) {
-                modified = PlaceholderAPI.setPlaceholders(player, modified);
+                modified = resolvePlaceholdersRecursively(modified);
             }
 
             Matcher matcher = CONDITION_PATTERN.matcher(modified);
@@ -568,6 +568,26 @@ public class Nametag implements INametag {
             result.add(sb.toString());
         }
         return result;
+    }
+
+    /**
+     * Resolves PlaceholderAPI placeholders repeatedly so that a placeholder whose
+     * output contains another placeholder (e.g. %luckperms_prefix% expanding to a
+     * value that itself holds %another_papi%) is fully expanded.
+     * <p>
+     * Loops until the output stops changing or the configured
+     * {@code nametags.display.placeholder-depth} is reached, guarding against
+     * self-referential placeholders that never resolve.
+     */
+    private String resolvePlaceholdersRecursively(String input) {
+        String current = input;
+        int maxDepth = plugin.config().getNametagConfig().getPlaceholderDepth();
+        for (int depth = 0; depth < maxDepth; depth++) {
+            String resolved = PlaceholderAPI.setPlaceholders(player, current);
+            if (resolved.equals(current)) break;
+            current = resolved;
+        }
+        return current;
     }
 
     /**

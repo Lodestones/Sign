@@ -5,44 +5,34 @@ import org.bukkit.command.CommandSender;
 
 import java.util.List;
 
+/**
+ * Sends command feedback in a plain, vanilla-style format: yellow text with no
+ * icons, brackets, gradients, or other decoration. All severities (success,
+ * warning, error, info) render identically as yellow text so output reads like
+ * vanilla Minecraft command responses.
+ */
 public class MessageHelper {
-    static String SUCCESS = "<#7EFF00>";
-    static String WARN = "<#FFFF00>";
-    static String DANGER = "<#FF0000>";
+    private static final String COLOR = "<yellow>";
 
     public static void success(CommandSender sender, String message) {
-        send(sender, format("{success} <reset>{success_color}" + message));
+        send(sender, message);
     }
 
     public static void warning(CommandSender sender, String message) {
-        send(sender, format("{warn} <reset>{warn_color}" + message));
+        send(sender, message);
     }
 
     public static void error(CommandSender sender, String message) {
-        send(sender, format("{danger} <reset>{danger_color}" + message));
+        send(sender, message);
     }
 
     public static void send(CommandSender sender, String message) {
-        sender.sendMessage(
-                ComponentUtils.format(format(message))
-        );
+        sender.sendMessage(ComponentUtils.format(COLOR + message));
     }
 
     public static void send(CommandSender sender, List<String> messages) {
         for (String message : messages) {
             send(sender, message);
         }
-    }
-
-    private static String format(String input) {
-        return input
-                .replace("{success}", "{start}{success_color}✔{end}")
-                .replace("{warn}", "{start}{warn_color}⚠{end}")
-                .replace("{danger}", "{start}{danger_color}❌{end}")
-                .replace("{success_color}", SUCCESS)
-                .replace("{warn_color}", WARN)
-                .replace("{danger_color}", DANGER)
-                .replace("{start}", "<dark_gray>[")
-                .replace("{end}", "<dark_gray>]");
     }
 }

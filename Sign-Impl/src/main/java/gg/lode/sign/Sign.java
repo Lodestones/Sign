@@ -35,7 +35,7 @@ import java.util.logging.Logger;
 public final class Sign implements ISign, SignBootstrap {
     public static final String VERSION = "${VERSION}";
 
-    private static final int CONFIG_VERSION = 1;
+    private static final int CONFIG_VERSION = 2;
 
     private static Sign instance;
     private static SignConfig config;
@@ -173,6 +173,11 @@ public final class Sign implements ISign, SignBootstrap {
                     }
                     if (!cfg.contains("nametags.display.condense-holograms")) {
                         cfg.set("nametags.display.condense-holograms", false);
+                    }
+                }
+                case 1 -> {
+                    if (!cfg.contains("nametags.display.placeholder-depth")) {
+                        cfg.set("nametags.display.placeholder-depth", 5);
                     }
                 }
             }

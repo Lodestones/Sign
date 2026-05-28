@@ -1,13 +1,11 @@
 package gg.lode.sign.commands;
 
 import dev.jorel.commandapi.CommandAPICommand;
-import dev.jorel.commandapi.executors.CommandExecutor;
 import gg.lode.sign.Sign;
 import gg.lode.sign.config.NametagConfig;
-import gg.lode.sign.entities.DisplayBillboard;
-import gg.lode.sign.entities.TextAlignment;
 import gg.lode.sign.utils.helpers.MessageHelper;
 import org.bukkit.util.Vector;
+import gg.lode.bookshelfapi.api.util.MiniMessageHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,8 +17,14 @@ public class SignCommand extends CommandAPICommand {
 
         withSubcommand(new CommandAPICommand("version")
                 .executes((sender, args) -> {
-                    MessageHelper.send(sender, "This server is running <yellow>Sign v" + Sign.VERSION + "<white>!");
-                    MessageHelper.send(sender, "Run <yellow>'/sign help' <white>for a full list of commands.");
+                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
+                    sender.sendMessage(MiniMessageHelper.deserialize("  <yellow><bold>Sign"));
+                    sender.sendMessage(MiniMessageHelper.deserialize("  You are running <yellow>Sign " + Sign.VERSION));
+                    sender.sendMessage(MiniMessageHelper.deserialize("  Using loader version <yellow>v" + plugin.host().getDescription().getVersion()));
+                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
+                    sender.sendMessage(MiniMessageHelper.deserialize("  You can download <yellow>Sign<reset> over at <gold>Lodestone<reset>!"));
+                    sender.sendMessage(MiniMessageHelper.deserialize("  <gold><underlined><click:open_url:'https://lode.gg/plugin/sign'>https://lode.gg/plugin/sign"));
+                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
                 }));
 
         withSubcommand(new CommandAPICommand("reload")
@@ -28,9 +32,9 @@ public class SignCommand extends CommandAPICommand {
                 .executes((sender, args) -> {
                     boolean success = plugin.reloadPlugin();
                     if (success) {
-                        MessageHelper.success(sender, "Successfully reloaded!");
+                        MessageHelper.send(sender, "Reloaded Sign configuration.");
                     } else {
-                        MessageHelper.error(sender, "Failed to reload the plugin, please check server logs!");
+                        MessageHelper.send(sender, "Failed to reload Sign, check the server logs.");
                     }
                 })
         );
@@ -39,69 +43,42 @@ public class SignCommand extends CommandAPICommand {
                 .withPermission("lodestone.sign.admin")
                 .executes((sender, args) -> {
                     NametagConfig config = plugin.config().getNametagConfig();
-                    boolean enabled = config.isEnabled();
-                    boolean hideSelf = config.shouldHideSelf();
-                    int updateInterval = config.getUpdateInterval();
-                    int visibilityDistance = config.getVisibilityDistance();
-                    List<String> lines = config.getLines();
-                    boolean textShadow = config.hasTextShadow();
-                    boolean seeThrough = config.isSeeThrough();
-                    TextAlignment textAlignment = config.getTextAlignment();
-                    String background = config.getBackground();
-                    DisplayBillboard billboard = config.getBillboard();
                     Vector scale = config.getScale();
-                    List<String> scaleText = new ArrayList<>();
-                    scaleText.add("<white>X <dark_gray>→ <gray>" + scale.getX());
-                    scaleText.add("<white>Y <dark_gray>→ <gray>" + scale.getY());
-                    scaleText.add("<white>Z <dark_gray>→ <gray>" + scale.getZ());
 
                     List<String> messages = new ArrayList<>();
-                    messages.add("<dark_gray>• <white>Nametags");
-                    messages.add("  <white>Enabled <dark_gray>→ " + booleanToString(enabled));
-                    messages.add("  <white>Show Self <dark_gray>→ " + booleanToString(!hideSelf));
-                    messages.add("  <white>Update Interval <dark_gray>→ <gray>" + updateInterval + " ticks");
-                    messages.add("  <white>Visibility Distance <dark_gray>→ <gray>" + visibilityDistance + " blocks");
-                    messages.add("<dark_gray>• <white>Display");
-                    messages.add("  <white>Lines <dark_gray>→ <hover:show_text:'{lines}'><gray><u>Hover".replace("{lines}", String.join("\n", lines)));
-                    messages.add("  <white>Text Shadow <dark_gray>→ " + booleanToString(textShadow));
-                    messages.add("  <white>See Through <dark_gray>→ " + booleanToString(seeThrough));
-                    messages.add("  <white>Support Crouching <dark_gray>→ " + booleanToString(config.supportsCrouching()));
-                    messages.add("  <white>Condense Holograms <dark_gray>→ " + booleanToString(config.isCondenseHolograms()));
-                    messages.add("  <white>Text Alignment <dark_gray>→ <gray>" + textAlignment.name());
-                    messages.add("  <white>Background <dark_gray>→ " + color(background) + background(background));
-                    messages.add("  <white>Billboard <dark_gray>→ <gray>" + billboard.name());
-                    messages.add("  <white>Scale <dark_gray>→ <hover:show_text:'{scale}'><gray><u>Hover".replace("{scale}", String.join("\n", scaleText)));
-                    messages.add("<dark_gray>• <white>Voice Chat");
-                    messages.add("  <white>Enabled <dark_gray>→ " + booleanToString(config.isVoiceChatEnabled()));
+                    messages.add("Nametags:");
+                    messages.add("  Enabled: " + config.isEnabled());
+                    messages.add("  Show Self: " + !config.shouldHideSelf());
+                    messages.add("  Update Interval: " + config.getUpdateInterval() + " ticks");
+                    messages.add("  Visibility Distance: " + config.getVisibilityDistance() + " blocks");
+                    messages.add("Display:");
+                    messages.add("  Lines: " + String.join(", ", config.getLines()));
+                    messages.add("  Text Shadow: " + config.hasTextShadow());
+                    messages.add("  See Through: " + config.isSeeThrough());
+                    messages.add("  Support Crouching: " + config.supportsCrouching());
+                    messages.add("  Condense Holograms: " + config.isCondenseHolograms());
+                    messages.add("  Text Alignment: " + config.getTextAlignment().name());
+                    messages.add("  Background: " + background(config.getBackground()));
+                    messages.add("  Billboard: " + config.getBillboard().name());
+                    messages.add("  Placeholder Depth: " + config.getPlaceholderDepth());
+                    messages.add("  Scale: " + scale.getX() + ", " + scale.getY() + ", " + scale.getZ());
+                    messages.add("Voice Chat:");
+                    messages.add("  Enabled: " + config.isVoiceChatEnabled());
                     if (config.isVoiceChatEnabled()) {
-                        List<String> iconText = new ArrayList<>();
-                        iconText.add("<white>Speaking <dark_gray>→ <gray>" + config.getVoiceIconSpeaking());
-                        iconText.add("<white>Idle <dark_gray>→ <gray>" + config.getVoiceIconIdle());
-                        iconText.add("<white>Deafened <dark_gray>→ <gray>" + config.getVoiceIconDeafened());
-                        iconText.add("<white>Disconnected <dark_gray>→ <gray>" + config.getVoiceIconDisconnected());
-                        messages.add("  <white>Icons <dark_gray>→ <hover:show_text:'{icons}'><gray><u>Hover".replace("{icons}", String.join("\n", iconText)));
+                        messages.add("  Speaking Icon: " + config.getVoiceIconSpeaking());
+                        messages.add("  Idle Icon: " + config.getVoiceIconIdle());
+                        messages.add("  Deafened Icon: " + config.getVoiceIconDeafened());
+                        messages.add("  Disconnected Icon: " + config.getVoiceIconDisconnected());
                     }
 
-                    sender.sendMessage("");
                     MessageHelper.send(sender, messages);
-                    sender.sendMessage("");
                 })
         );
     }
 
-    private static String booleanToString(boolean b) {
-        return b ? "<green>Yes" : "<red>No";
-    }
-
     private static String background(String background) {
         if (Objects.equals(background, "default")) return "Default";
-        if (Objects.equals(background, "Transparent")) return "Transparent";
+        if (Objects.equals(background, "transparent")) return "Transparent";
         return background;
-    }
-
-    private static String color(String hex) {
-        if (Objects.equals(hex, "default")) return "<gray>";
-        if (Objects.equals(hex, "transparent")) return "<white>";
-        return "<" + hex + ">";
     }
 }
