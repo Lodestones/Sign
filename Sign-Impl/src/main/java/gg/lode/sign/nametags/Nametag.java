@@ -13,6 +13,7 @@ import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
+import gg.lode.bookshelfapi.api.util.MiniMessageHelper;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -597,10 +598,20 @@ public class Nametag implements INametag {
     private List<Component> parseComponents(List<String> resolvedStrings) {
         List<Component> result = new ArrayList<>(resolvedStrings.size());
         for (String s : resolvedStrings) {
-            Component component = ComponentUtils.format(s);
+            Component component = toComponent(s);
             result.add(ComponentUtils.isBlank(component) ? null : component);
         }
         return result;
+    }
+
+    /**
+     * Renders the final resolved line (after PlaceholderAPI recursion) to a
+     * Component via MiniMessageHelper. Legacy color/style codes using either
+     * {@code &} or {@code §} are translated to MiniMessage first; literals such
+     * as {@code $} are not color codes and pass through untouched.
+     */
+    private Component toComponent(String input) {
+        return MiniMessageHelper.deserialize(MiniMessageHelper.convertAmpersandToMiniMessage(input));
     }
 
     private List<Component> resolveLines(List<String> linesToResolve) {
