@@ -4,8 +4,8 @@ import dev.jorel.commandapi.CommandAPICommand;
 import gg.lode.sign.Sign;
 import gg.lode.sign.config.NametagConfig;
 import gg.lode.sign.utils.helpers.MessageHelper;
+import gg.lode.sign.utils.ComponentUtils;
 import org.bukkit.util.Vector;
-import gg.lode.bookshelfapi.api.util.MiniMessageHelper;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,14 +17,14 @@ public class SignCommand extends CommandAPICommand {
 
         withSubcommand(new CommandAPICommand("version")
                 .executes((sender, args) -> {
-                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
-                    sender.sendMessage(MiniMessageHelper.deserialize("  <yellow><bold>Sign"));
-                    sender.sendMessage(MiniMessageHelper.deserialize("  You are running <yellow>Sign " + Sign.VERSION));
-                    sender.sendMessage(MiniMessageHelper.deserialize("  Using loader version <yellow>v" + plugin.host().getDescription().getVersion()));
-                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
-                    sender.sendMessage(MiniMessageHelper.deserialize("  You can download <yellow>Sign<reset> over at <gold>Lodestone<reset>!"));
-                    sender.sendMessage(MiniMessageHelper.deserialize("  <gold><underlined><click:open_url:'https://lode.gg/plugin/sign'>https://lode.gg/plugin/sign"));
-                    sender.sendMessage(MiniMessageHelper.deserialize(" "));
+                    sender.sendMessage(ComponentUtils.miniMessage(" "));
+                    sender.sendMessage(ComponentUtils.miniMessage("  <yellow><bold>Sign"));
+                    sender.sendMessage(ComponentUtils.miniMessage("  You are running <yellow>Sign " + Sign.VERSION));
+                    sender.sendMessage(ComponentUtils.miniMessage("  Using loader version <yellow>v" + plugin.host().getDescription().getVersion()));
+                    sender.sendMessage(ComponentUtils.miniMessage(" "));
+                    sender.sendMessage(ComponentUtils.miniMessage("  You can download <yellow>Sign<reset> over at <gold>Lodestone<reset>!"));
+                    sender.sendMessage(ComponentUtils.miniMessage("  <gold><underlined><click:open_url:'https://lode.gg/plugin/sign'>https://lode.gg/plugin/sign"));
+                    sender.sendMessage(ComponentUtils.miniMessage(" "));
                 }));
 
         withSubcommand(new CommandAPICommand("reload")
