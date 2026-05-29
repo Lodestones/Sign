@@ -28,7 +28,6 @@ subprojects {
         maven { url = "https://repo.extendedclip.com/content/repositories/placeholderapi/" }
         maven { url = "https://jitpack.io" }
         maven { url = "https://maven.maxhenkel.de/repository/public" }
-        maven { url = "https://repo.nexomc.com/releases" }
     }
 
     def targetJavaVersion = 21
