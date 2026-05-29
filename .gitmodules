@@ -1,3 +1,6 @@
 [submodule "Sign-API"]
 	path = Sign-API
 	url = https://github.com/Lodestones/Sign-API.git
+[submodule "Sign-Loader"]
+	path = Sign-Loader
+	url = https://github.com/Lodestones/Sign-Loader.git

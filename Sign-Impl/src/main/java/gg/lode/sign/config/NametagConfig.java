@@ -24,6 +24,7 @@ public class NametagConfig {
     private String background;
     private DisplayBillboard billboard;
     private Vector scale;
+    private int placeholderDepth;
 
     // Voice chat
     private boolean voiceChatEnabled;
@@ -54,6 +55,7 @@ public class NametagConfig {
         this.background = config.getString("nametags.display.background", "default");
         this.billboard = DisplayBillboard.valueOf(config.getString("nametags.display.billboard", "center").toUpperCase());
         this.scale = parseScale(config);
+        this.placeholderDepth = config.getInt("nametags.display.placeholder-depth", 5);
 
         // Voice chat
         this.voiceChatEnabled = config.getBoolean("nametags.voice-chat.enabled", false);
@@ -113,6 +115,10 @@ public class NametagConfig {
 
     public Vector getScale() {
         return scale;
+    }
+
+    public int getPlaceholderDepth() {
+        return placeholderDepth;
     }
 
     public boolean isVoiceChatEnabled() {

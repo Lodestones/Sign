@@ -60,7 +60,7 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
 
         // Short delay — entity was never destroyed for other viewers, just need respawn to finish
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
             if (!player.isOnline()) return;
 
             // Re-show after death hid the nametag (entity still exists on viewers' clients)
@@ -100,14 +100,14 @@ public class PlayerListener implements Listener {
             } else if (player.getGameMode() == GameMode.SPECTATOR) {
                 // Coming out of spectator — entity will be re-spawned for viewers via SPAWN_ENTITY,
                 // but we also explicitly show in case tracking doesn't trigger a respawn
-                plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
                     if (player.isOnline()) nametag.showToEligible();
                 }, 2L);
             }
         }
 
         // Update other nametags for this viewer
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+        plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
             if (!player.isOnline()) return;
             for (Nametag other : nametagManager.getAll()) {
                 if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;

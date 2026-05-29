@@ -12,8 +12,12 @@ import gg.lode.sign.utils.ComponentUtils;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
+import gg.lode.sign.utils.hooks.ItemsAdderHook;
+import gg.lode.sign.utils.hooks.NexoHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.GameMode;
@@ -249,6 +253,17 @@ public class Nametag implements INametag {
                 }
             }
         }
+
+        // Catch players in range but not tracked (missed SPAWN_ENTITY, re-entered vicinity)
+        for (Player viewer : Bukkit.getOnlinePlayers()) {
+            if (viewer.equals(player)) continue;
+            if (tracked.contains(viewer.getUniqueId())) continue;
+            if (viewers.contains(viewer.getUniqueId())) continue;
+            if (shouldSee(viewer)) {
+                tracked.add(viewer.getUniqueId());
+                this.show(viewer);
+            }
+        }
     }
 
     /**
@@ -272,7 +287,7 @@ public class Nametag implements INametag {
         boolean shouldSee = shouldSee(viewer);
         boolean isVisible = this.viewers.contains(viewer.getUniqueId());
 
-        if (shouldSee && !isVisible) {
+        if (shouldSee && !isVisible && tracked.contains(viewer.getUniqueId())) {
             this.show(viewer);
         } else if (!shouldSee && isVisible) {
             this.hide(viewer);
@@ -359,6 +374,19 @@ public class Nametag implements INametag {
             ClientEntity.sendBundle(viewer, List.of(condensedDisplay.createMountPacket(this.player)));
         } else {
             ClientEntity.sendBundle(viewer, List.of(ClientEntity.createMountPacket(this.player, lineDisplays)));
+        }
+    }
+
+    /**
+     * Re-sends mount packets to all current viewers.
+     * Lightweight heartbeat to recover from client-side mount drops.
+     */
+    public void remountAll() {
+        for (UUID viewerUuid : viewers) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline()) {
+                remount(viewer);
+            }
         }
     }
 
@@ -530,7 +558,7 @@ public class Nametag implements INametag {
                     .replace("{health}", HEALTH_FORMAT.format(player.getHealth()))
                     .replace("{voice}", resolveVoiceIcon());
             if (DependencyHelper.isPlaceholderAPIEnabled()) {
-                modified = PlaceholderAPI.setPlaceholders(player, modified);
+                modified = resolvePlaceholdersRecursively(modified);
             }
 
             Matcher matcher = CONDITION_PATTERN.matcher(modified);
@@ -547,16 +575,56 @@ public class Nametag implements INametag {
     }
 
     /**
+     * Resolves PlaceholderAPI placeholders repeatedly so that a placeholder whose
+     * output contains another placeholder (e.g. %luckperms_prefix% expanding to a
+     * value that itself holds %another_papi%) is fully expanded.
+     * <p>
+     * Loops until the output stops changing or the configured
+     * {@code nametags.display.placeholder-depth} is reached, guarding against
+     * self-referential placeholders that never resolve.
+     */
+    private String resolvePlaceholdersRecursively(String input) {
+        String current = input;
+        int maxDepth = plugin.config().getNametagConfig().getPlaceholderDepth();
+        for (int depth = 0; depth < maxDepth; depth++) {
+            String resolved = PlaceholderAPI.setPlaceholders(player, current);
+            if (resolved.equals(current)) break;
+            current = resolved;
+        }
+        return current;
+    }
+
+    /**
      * Parses resolved strings into Components via MiniMessage (expensive).
      * Only call when the resolved strings have actually changed.
      */
     private List<Component> parseComponents(List<String> resolvedStrings) {
         List<Component> result = new ArrayList<>(resolvedStrings.size());
         for (String s : resolvedStrings) {
-            Component component = ComponentUtils.format(s);
+            Component component = toComponent(s);
             result.add(ComponentUtils.isBlank(component) ? null : component);
         }
         return result;
+    }
+
+    /**
+     * Renders the final resolved line (after PlaceholderAPI recursion) to a
+     * Component. Legacy color/style codes using either {@code &} or {@code §}
+     * are translated to MiniMessage first; literals such as {@code $} are not
+     * color codes and pass through untouched. When Nexo is installed, its
+     * {@code <glyph:id>} tags are resolved via the glyph resolver, with the
+     * nametag owner supplied as the MiniMessage target so Nexo gates
+     * permission-restricted glyphs by the owner's permissions. Finally, when
+     * ItemsAdder is installed, its {@code :emoji:} font images are resolved on
+     * the rendered component (owner-gated).
+     */
+    private Component toComponent(String input) {
+        String converted = ComponentUtils.convertAmpersandToMiniMessage(input);
+        TagResolver glyphResolver = NexoHook.glyphResolver();
+        Component component = glyphResolver != null
+                ? MiniMessage.miniMessage().deserialize(converted, player, glyphResolver)
+                : MiniMessage.miniMessage().deserialize(converted);
+        return ItemsAdderHook.replaceEmotes(player, component);
     }
 
     private List<Component> resolveLines(List<String> linesToResolve) {

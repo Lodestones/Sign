@@ -8,6 +8,10 @@ public class NametagScheduler {
     private final Sign plugin;
     private BukkitTask task;
 
+    /** Re-send mount packets every 5 seconds (100 ticks) to recover from client-side drops. */
+    private static final int REMOUNT_INTERVAL_TICKS = 100;
+    private int ticksUntilRemount;
+
     public NametagScheduler(Sign plugin) {
         this.plugin = plugin;
     }
@@ -16,9 +20,14 @@ public class NametagScheduler {
         if (plugin.config().getNametagConfig().isEnabled()) {
             plugin.getLogger().info("Starting Nametag scheduler...");
             int interval = plugin.config().getNametagConfig().getUpdateInterval();
-            task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            ticksUntilRemount = REMOUNT_INTERVAL_TICKS;
+            task = Bukkit.getScheduler().runTaskTimer(plugin.host(), () -> {
+                boolean remount = (ticksUntilRemount -= interval) <= 0;
+                if (remount) ticksUntilRemount = REMOUNT_INTERVAL_TICKS;
+
                 for (Nametag nametag : plugin.getNametagManager().getAll()) {
                     nametag.updateVisibilityForAll();
+                    if (remount) nametag.remountAll();
                 }
 
             }, interval, interval);
