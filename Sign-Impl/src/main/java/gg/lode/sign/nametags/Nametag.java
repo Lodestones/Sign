@@ -612,14 +612,16 @@ public class Nametag implements INametag {
      * Component. Legacy color/style codes using either {@code &} or {@code §}
      * are translated to MiniMessage first; literals such as {@code $} are not
      * color codes and pass through untouched. When Nexo is installed, its
-     * {@code <glyph:id>} tags are resolved via the player-aware resolver;
-     * otherwise the standard MiniMessageHelper path is used.
+     * {@code <glyph:id>} tags are resolved via the glyph resolver, with the
+     * nametag owner supplied as the MiniMessage target so Nexo gates
+     * permission-restricted glyphs by the owner's permissions; otherwise the
+     * standard MiniMessageHelper path is used.
      */
     private Component toComponent(String input) {
         String converted = MiniMessageHelper.convertAmpersandToMiniMessage(input);
         TagResolver glyphResolver = NexoHook.glyphResolver();
         if (glyphResolver != null) {
-            return MiniMessage.miniMessage().deserialize(converted, glyphResolver);
+            return MiniMessage.miniMessage().deserialize(converted, player, glyphResolver);
         }
         return MiniMessageHelper.deserialize(converted);
     }
