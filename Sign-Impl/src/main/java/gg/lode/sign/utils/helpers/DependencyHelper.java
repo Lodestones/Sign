@@ -9,6 +9,7 @@ public class DependencyHelper {
     static boolean enabledSimpleVoiceChat;
     static boolean enabledAmplifier;
     static boolean enabledNexo;
+    static boolean enabledItemsAdder;
 
     public static void load() {
         PluginManager pluginManager = Bukkit.getPluginManager();
@@ -17,6 +18,7 @@ public class DependencyHelper {
         if (pluginManager.isPluginEnabled("voicechat")) enabledSimpleVoiceChat = true;
         if (pluginManager.isPluginEnabled("Amplifier")) enabledAmplifier = true;
         if (pluginManager.isPluginEnabled("Nexo")) enabledNexo = true;
+        if (pluginManager.isPluginEnabled("ItemsAdder")) enabledItemsAdder = true;
     }
 
     public static boolean isPlaceholderAPIEnabled() {
@@ -37,5 +39,9 @@ public class DependencyHelper {
 
     public static boolean isNexoEnabled() {
         return enabledNexo;
+    }
+
+    public static boolean isItemsAdderEnabled() {
+        return enabledItemsAdder;
     }
 }

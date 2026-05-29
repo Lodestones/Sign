@@ -12,6 +12,7 @@ import gg.lode.sign.utils.ComponentUtils;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
+import gg.lode.sign.utils.hooks.ItemsAdderHook;
 import gg.lode.sign.utils.hooks.NexoHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import net.kyori.adventure.text.Component;
@@ -613,15 +614,17 @@ public class Nametag implements INametag {
      * color codes and pass through untouched. When Nexo is installed, its
      * {@code <glyph:id>} tags are resolved via the glyph resolver, with the
      * nametag owner supplied as the MiniMessage target so Nexo gates
-     * permission-restricted glyphs by the owner's permissions.
+     * permission-restricted glyphs by the owner's permissions. Finally, when
+     * ItemsAdder is installed, its {@code :emoji:} font images are resolved on
+     * the rendered component (owner-gated).
      */
     private Component toComponent(String input) {
         String converted = ComponentUtils.convertAmpersandToMiniMessage(input);
         TagResolver glyphResolver = NexoHook.glyphResolver();
-        if (glyphResolver != null) {
-            return MiniMessage.miniMessage().deserialize(converted, player, glyphResolver);
-        }
-        return MiniMessage.miniMessage().deserialize(converted);
+        Component component = glyphResolver != null
+                ? MiniMessage.miniMessage().deserialize(converted, player, glyphResolver)
+                : MiniMessage.miniMessage().deserialize(converted);
+        return ItemsAdderHook.replaceEmotes(player, component);
     }
 
     private List<Component> resolveLines(List<String> linesToResolve) {
