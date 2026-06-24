@@ -31,7 +31,10 @@ import java.util.regex.Pattern;
 
 public class Nametag implements INametag {
     private static final Pattern CONDITION_PATTERN = Pattern.compile("<condition:'([^']+)'>(.+?)</condition>");
-    private static final DecimalFormat HEALTH_FORMAT = new DecimalFormat("#.##");
+    private static final DecimalFormat HEALTH_FORMAT = new DecimalFormat("0");
+    private static final DecimalFormat HEALTH_VERBOSE_FORMAT = new DecimalFormat("0.0");
+    // {health}, {health:verbose}, {health:verbose:<n>}
+    private static final Pattern HEALTH_PATTERN = Pattern.compile("\\{health(?::verbose(?::(\\d+))?)?\\}");
     private static final byte OPACITY_FULL = -1;
     private static final byte OPACITY_CROUCHING = 64;
     private static final float BASE_Y_OFFSET = 0.25f;
@@ -530,6 +533,36 @@ public class Nametag implements INametag {
         return resolveLines(lines);
     }
 
+    /**
+     * Resolves the {health} placeholder family:
+     *   {health}            -> integer health (20)
+     *   {health:verbose}    -> one decimal place (20.0)
+     *   {health:verbose:<n>} -> one decimal when health <= n, else integer
+     */
+    private String resolveHealth(String line) {
+        if (line.indexOf("{health") < 0) return line;
+        double health = player.getHealth();
+        Matcher matcher = HEALTH_PATTERN.matcher(line);
+        StringBuilder sb = new StringBuilder();
+        while (matcher.find()) {
+            boolean verbose = matcher.group(0).contains(":verbose");
+            String threshold = matcher.group(1);
+            String replacement;
+            if (!verbose) {
+                replacement = HEALTH_FORMAT.format(health);
+            } else if (threshold == null) {
+                replacement = HEALTH_VERBOSE_FORMAT.format(health);
+            } else {
+                replacement = health <= Double.parseDouble(threshold)
+                        ? HEALTH_VERBOSE_FORMAT.format(health)
+                        : HEALTH_FORMAT.format(health);
+            }
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
+    }
+
     private String resolveVoiceIcon() {
         NametagConfig config = plugin.config().getNametagConfig();
         if (!config.isVoiceChatEnabled() || !DependencyHelper.isSimpleVoiceChatEnabled()) return "";
@@ -553,10 +586,9 @@ public class Nametag implements INametag {
     private List<String> resolveToStrings(List<String> linesToResolve) {
         List<String> result = new ArrayList<>(linesToResolve.size());
         for (String line : linesToResolve) {
-            String modified = line
+            String modified = resolveHealth(line
                     .replace("{player}", player.getName())
-                    .replace("{health}", HEALTH_FORMAT.format(player.getHealth()))
-                    .replace("{voice}", resolveVoiceIcon());
+                    .replace("{voice}", resolveVoiceIcon()));
             if (DependencyHelper.isPlaceholderAPIEnabled()) {
                 modified = resolvePlaceholdersRecursively(modified);
             }

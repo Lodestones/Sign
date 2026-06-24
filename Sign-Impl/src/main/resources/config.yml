@@ -32,9 +32,11 @@ nametags:
     # PlaceholderAPI is supported for dynamic data.
     #
     # Built-in placeholders (no extra plugin needed):
-    # {player}  - Player's name
-    # {health}  - Player's current health (e.g. 20)
-    # {voice}   - Voice chat status icon (requires Simple Voice Chat & voice-chat.enabled)
+    # {player}           - Player's name
+    # {health}           - Player's current health (e.g. 20, 10, 5)
+    # {health:verbose}   - Player's current health with decimal points (e.g. 20.0, 10.0, or 1.5)
+    # {health:verbose:5} - Player's current health with decimal points below or equal to the number (e.g. 20, then 5.0 if set to 5)
+    # {voice}            - Voice chat status icon (requires Simple Voice Chat & voice-chat.enabled)
     lines:
       - "<gray>{player}</gray>"
       - "<red>❤ <white>{health}"
