@@ -128,3 +128,4 @@ mappings/
 
 # Environment variables
 .env
+CHANGELOG.md
