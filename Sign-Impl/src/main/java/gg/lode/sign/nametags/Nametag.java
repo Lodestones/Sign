@@ -55,6 +55,12 @@ public class Nametag implements INametag {
     // Global line override
     private List<String> globalOverride;
 
+    // Persistent hide — survives the scheduler's visibility passes
+    private volatile boolean hidden;
+
+    // Viewer whitelist — null means everyone may see the tag
+    private volatile Set<UUID> viewerWhitelist;
+
     // Per-viewer line overrides
     private final Map<UUID, List<String>> viewerOverrides;
 
@@ -298,7 +304,9 @@ public class Nametag implements INametag {
     }
 
     private boolean shouldSee(Player viewer) {
+        if (hidden) return false;
         if (viewer == null || !viewer.isOnline() || viewer.isDead()) return false;
+        if (viewerWhitelist != null && !viewerWhitelist.contains(viewer.getUniqueId())) return false;
         if (hideSelf && player.getUniqueId().equals(viewer.getUniqueId())) return false;
         if (player.isDead() || player.getGameMode().equals(GameMode.SPECTATOR)) return false;
         if (!viewer.getWorld().getName().equals(player.getWorld().getName())) return false;
@@ -728,6 +736,49 @@ public class Nametag implements INametag {
                 this.update(viewer);
             }
         }
+    }
+
+    @Override
+    public void setHidden(boolean hidden) {
+        if (this.hidden == hidden) return;
+        this.hidden = hidden;
+        if (hidden) {
+            hideForAll();
+        } else {
+            updateVisibilityForAll();
+        }
+    }
+
+    @Override
+    public boolean isHidden() {
+        return hidden;
+    }
+
+    @Override
+    public void setViewers(Collection<Player> allowedViewers) {
+        if (allowedViewers == null) {
+            clearViewers();
+            return;
+        }
+        Set<UUID> whitelist = ConcurrentHashMap.newKeySet();
+        for (Player allowed : allowedViewers) {
+            if (allowed != null) whitelist.add(allowed.getUniqueId());
+        }
+        this.viewerWhitelist = whitelist;
+        // Hides now-excluded viewers and shows newly-allowed tracked ones.
+        updateVisibilityForAll();
+    }
+
+    @Override
+    public void clearViewers() {
+        if (this.viewerWhitelist == null) return;
+        this.viewerWhitelist = null;
+        updateVisibilityForAll();
+    }
+
+    @Override
+    public boolean hasViewerWhitelist() {
+        return viewerWhitelist != null;
     }
 
     @Override
