@@ -44,6 +44,10 @@ public class Nametag implements INametag {
     private final Player player;
     private final Set<UUID> viewers;
     private final Set<UUID> tracked; // viewers whose clients have the player entity (received SPAWN_ENTITY)
+    // After a client-side world wipe (respawn/dimension change), the catch-up
+    // pass must not blind-show until the packet path re-confirms the entity.
+    private static final long CATCH_UP_SUPPRESS_MS = 3000;
+    private final Map<UUID, Long> catchUpSuppressedUntil;
 
     private final List<String> lines;
     private final boolean hideSelf;
@@ -91,6 +95,7 @@ public class Nametag implements INametag {
         this.viewerResolvedCache = new HashMap<>();
         this.viewerCondensedCache = new HashMap<>();
         this.viewerResolvedStringCache = new HashMap<>();
+        this.catchUpSuppressedUntil = new ConcurrentHashMap<>();
 
         NametagConfig config = plugin.config().getNametagConfig();
         this.lines = config.getLines();
@@ -160,6 +165,7 @@ public class Nametag implements INametag {
                 viewerResolvedCache.remove(uuid);
                 viewerCondensedCache.remove(uuid);
                 viewerResolvedStringCache.remove(uuid);
+                catchUpSuppressedUntil.remove(uuid);
                 return true;
             }
             return false;
@@ -268,6 +274,11 @@ public class Nametag implements INametag {
             if (viewer.equals(player)) continue;
             if (tracked.contains(viewer.getUniqueId())) continue;
             if (viewers.contains(viewer.getUniqueId())) continue;
+            Long suppressedUntil = catchUpSuppressedUntil.get(viewer.getUniqueId());
+            if (suppressedUntil != null) {
+                if (System.currentTimeMillis() < suppressedUntil) continue;
+                catchUpSuppressedUntil.remove(viewer.getUniqueId());
+            }
             if (shouldSee(viewer)) {
                 tracked.add(viewer.getUniqueId());
                 this.show(viewer);
@@ -812,7 +823,25 @@ public class Nametag implements INametag {
      * Called by the packet listener when SPAWN_ENTITY is intercepted.
      */
     public void markTracked(UUID viewerUuid) {
+        catchUpSuppressedUntil.remove(viewerUuid);
         tracked.add(viewerUuid);
+    }
+
+    /**
+     * Forget everything about a viewer whose client just wiped its world
+     * (RESPAWN / dimension change sends no DESTROY_ENTITIES, so the tracked
+     * and visible state is silently stale). No packets are sent — the client
+     * already dropped the displays. The catch-up pass is suppressed briefly
+     * so the SPAWN_ENTITY packet path re-shows at the right moment instead
+     * of a blind show racing the client's world load (early mount packets).
+     */
+    public void forgetViewer(UUID viewerUuid) {
+        viewers.remove(viewerUuid);
+        tracked.remove(viewerUuid);
+        viewerResolvedCache.remove(viewerUuid);
+        viewerCondensedCache.remove(viewerUuid);
+        viewerResolvedStringCache.remove(viewerUuid);
+        catchUpSuppressedUntil.put(viewerUuid, System.currentTimeMillis() + CATCH_UP_SUPPRESS_MS);
     }
 
     /**

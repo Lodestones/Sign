@@ -28,6 +28,26 @@ public class PacketListener extends PacketListenerAbstract {
             handleDestroyEntities(event);
         } else if (event.getPacketType() == PacketType.Play.Server.SET_PASSENGERS) {
             handleSetPassengers(event);
+        } else if (event.getPacketType() == PacketType.Play.Server.RESPAWN) {
+            handleRespawn(event);
+        }
+    }
+
+    /**
+     * A respawn/dimension change wipes the client's entire entity list WITHOUT
+     * sending DESTROY_ENTITIES, so every nametag's tracked/visible state for
+     * this viewer is silently stale. Forget the viewer everywhere; the
+     * SPAWN_ENTITY path re-shows each tag once the client actually has the
+     * player entity again (prevents mount packets racing the world load on
+     * teleports to new worlds or spectate jumps).
+     */
+    private void handleRespawn(PacketSendEvent event) {
+        Player viewer = (Player) event.getPlayer();
+        if (viewer == null) return;
+
+        for (Nametag nametag : plugin.getNametagManager().getAll()) {
+            if (nametag.getPlayer().equals(viewer)) continue;
+            nametag.forgetViewer(viewer.getUniqueId());
         }
     }
 
