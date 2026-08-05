@@ -18,6 +18,7 @@ import gg.lode.sign.nametags.NametagScheduler;
 import gg.lode.sign.utils.handlers.NametagHandler;
 import gg.lode.sign.utils.helpers.DependencyHelper;
 import gg.lode.sign.utils.hooks.AmplifierHook;
+import gg.lode.sign.utils.hooks.FrameHook;
 import gg.lode.sign.utils.hooks.VoiceChatHook;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.Server;
@@ -99,6 +100,9 @@ public final class Sign implements ISign, SignBootstrap {
                 AmplifierHook.register(this);
             }
         }
+        if (DependencyHelper.isFrameEnabled()) {
+            FrameHook.register(this);
+        }
         NametagHandler.load();
 
         getLogger().info(String.format("Sign v%s has been enabled.", VERSION));
@@ -106,6 +110,7 @@ public final class Sign implements ISign, SignBootstrap {
 
     @Override
     public void onDisable(JavaPlugin host) {
+        if (DependencyHelper.isFrameEnabled()) FrameHook.unregister();
         AmplifierHook.unregister();
         VoiceChatHook.unregister();
         if (nametagScheduler != null) nametagScheduler.stop();

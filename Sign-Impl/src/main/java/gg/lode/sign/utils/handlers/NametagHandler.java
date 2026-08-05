@@ -5,6 +5,7 @@ import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTeams;
 import gg.lode.sign.Sign;
 import gg.lode.sign.utils.helpers.DependencyHelper;
+import gg.lode.sign.utils.hooks.FrameHook;
 import me.neznamy.tab.api.TabAPI;
 import me.neznamy.tab.api.TabPlayer;
 import me.neznamy.tab.api.event.player.PlayerLoadEvent;
@@ -28,6 +29,11 @@ public class NametagHandler {
 
     public static void hide(Player target, Player viewer) {
         if (DependencyHelper.isTABEnabled() && TabAPI.getInstance().getNameTagManager() != null) return;
+        // Frame owns this player's team. Sending our own would take them off it,
+        // and Frame would take them back on the next refresh — the two would
+        // trade the nametag back and forth forever. FrameHook answers NEVER for
+        // exactly these players instead.
+        if (DependencyHelper.isFrameEnabled() && FrameHook.isActive()) return;
         String name = getTeamName(target);
         WrapperPlayServerTeams.ScoreBoardTeamInfo teamInfo = new WrapperPlayServerTeams.ScoreBoardTeamInfo(
                 Component.empty(),
@@ -49,6 +55,9 @@ public class NametagHandler {
 
     public static void show(Player target, Player viewer) {
         if (DependencyHelper.isTABEnabled() && TabAPI.getInstance().getNameTagManager() != null) return;
+        // Nothing of ours to remove — see hide(). Frame stops answering NEVER
+        // once Sign drops the nametag, which un-hides it on its next refresh.
+        if (DependencyHelper.isFrameEnabled() && FrameHook.isActive()) return;
         String name = getTeamName(target);
         WrapperPlayServerTeams packet = new WrapperPlayServerTeams(
                 name,

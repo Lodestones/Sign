@@ -638,7 +638,13 @@ public class Nametag implements INametag {
         String current = input;
         int maxDepth = plugin.config().getNametagConfig().getPlaceholderDepth();
         for (int depth = 0; depth < maxDepth; depth++) {
-            String resolved = PlaceholderAPI.setPlaceholders(player, current);
+            // Brackets first: PlaceholderAPI treats {placeholder} and %placeholder%
+            // as two separate syntaxes with a call each, and a bracket is normally
+            // written *inside* a percent placeholder's arguments — as in
+            // %math0:CEILING{player_health_rounded}%. Resolving percent first would
+            // hand the expansion an argument that still says "{player_health}".
+            String resolved = PlaceholderAPI.setBracketPlaceholders(player, current);
+            resolved = PlaceholderAPI.setPlaceholders(player, resolved);
             if (resolved.equals(current)) break;
             current = resolved;
         }
