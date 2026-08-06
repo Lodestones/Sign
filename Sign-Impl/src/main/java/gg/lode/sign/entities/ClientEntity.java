@@ -72,16 +72,27 @@ public class ClientEntity {
     }
 
     public PacketWrapper<?> createMountPacket(Entity entity) {
-        return new WrapperPlayServerSetPassengers(
-                entity.getEntityId(),
-                new int[]{this.entityId}
-        );
+        return createMountPacket(entity, List.of(this));
     }
 
+    /**
+     * Builds a SET_PASSENGERS packet mounting the given client-side entities on
+     * {@code entity}. The packet is absolute — it replaces the client's whole
+     * passenger list for that vehicle — so the vehicle's real server-side
+     * passengers (e.g. a player sitting on another player via GSit) are merged
+     * in first. Omitting them silently unmounts the real rider client-side: they
+     * stop following the vehicle and snap to its true position on dismount.
+     * Real passengers keep the lower indices so their seat offsets are unchanged.
+     */
     public static PacketWrapper<?> createMountPacket(Entity entity, List<? extends ClientEntity> passengers) {
-        int[] ids = new int[passengers.size()];
-        for (int i = 0; i < passengers.size(); i++) {
-            ids[i] = passengers.get(i).getEntityId();
+        List<Entity> realPassengers = entity.getPassengers();
+        int[] ids = new int[realPassengers.size() + passengers.size()];
+        int index = 0;
+        for (Entity realPassenger : realPassengers) {
+            ids[index++] = realPassenger.getEntityId();
+        }
+        for (ClientEntity passenger : passengers) {
+            ids[index++] = passenger.getEntityId();
         }
         return new WrapperPlayServerSetPassengers(entity.getEntityId(), ids);
     }
