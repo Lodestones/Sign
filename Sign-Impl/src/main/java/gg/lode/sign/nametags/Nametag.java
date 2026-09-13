@@ -37,8 +37,10 @@ public class Nametag implements INametag {
     private static final Pattern HEALTH_PATTERN = Pattern.compile("\\{health(?::verbose(?::(\\d+))?)?\\}");
     private static final byte OPACITY_FULL = -1;
     private static final byte OPACITY_CROUCHING = 64;
-    private static final float BASE_Y_OFFSET = 0.25f;
-    private static final float LINE_SPACING = 0.27f;
+    // Package-visible so a virtual tag sits exactly where a player's does. Duplicating the numbers is
+    // how the two drift apart and one ends up a few centimetres off the other.
+    static final float BASE_Y_OFFSET = 0.25f;
+    static final float LINE_SPACING = 0.27f;
 
     private final Sign plugin;
     private final Player player;
@@ -879,6 +881,17 @@ public class Nametag implements INametag {
      */
     public void markUntracked(UUID viewerUuid) {
         tracked.remove(viewerUuid);
+    }
+
+    /** The configured background colour, shared so a virtual tag is shaded like a player's. */
+    static int configuredBackground() {
+        String background = Sign.getInstance().config().getNametagConfig().getBackground();
+        if (background == null || background.equalsIgnoreCase("default")) return -1;
+        if (background.equalsIgnoreCase("transparent")) return 0;
+        if (background.startsWith("#")) background = background.substring(1);
+        Color color = Color.fromARGB((int) Long.parseLong(background, 16));
+        if (background.length() == 6) color = color.setAlpha(255);
+        return color.asARGB();
     }
 
     private int getBackground() {
