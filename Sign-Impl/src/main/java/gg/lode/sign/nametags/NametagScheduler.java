@@ -30,6 +30,16 @@ public class NametagScheduler {
                     if (remount) nametag.remountAll();
                 }
 
+                // Tags riding an entity id need it more than a player's does. Their vehicle is not the
+                // server's — a replayed subject is spawned for each viewer when that viewer is meant to
+                // see it — so the first mount often names an entity the client has not been sent yet,
+                // and is dropped. Re-sending is the only thing that attaches them.
+                if (remount) {
+                    for (VirtualNametag nametag : plugin.getNametagManager().getVirtual()) {
+                        nametag.remountAll();
+                    }
+                }
+
             }, interval, interval);
         } else {
             plugin.getLogger().warning("Nametags are disabled for this server, therefore the nametag scheduler has not been started.");

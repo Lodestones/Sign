@@ -97,6 +97,24 @@ public class VirtualNametag implements IVirtualNametag {
         manager.forgetVirtual(this);
     }
 
+    /**
+     * Re-sends the mount to everybody shown this tag.
+     *
+     * <p>The vehicle is usually not the server's to begin with — a replayed subject is built from
+     * packets and spawned for each viewer on its own schedule — so the mount this tag sent when it was
+     * shown may have named an entity that viewer's client did not have yet, and a mount naming nothing
+     * is discarded without a word. Re-sent, it attaches as soon as the vehicle is really there.
+     *
+     * <p>Only the mount: the display itself already exists client-side, and respawning it would make the
+     * tag blink every time this runs.
+     */
+    public void remountAll() {
+        if (removed) return;
+        for (Player viewer : List.copyOf(viewers)) {
+            if (viewer.isOnline()) display.mount(vehicleEntityId, viewer);
+        }
+    }
+
     /** Takes a viewer off the list without sending anything — for one who has already gone. */
     void forgetViewer(Player viewer) {
         viewers.remove(viewer);
