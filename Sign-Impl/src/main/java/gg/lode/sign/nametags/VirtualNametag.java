@@ -1,6 +1,8 @@
 package gg.lode.sign.nametags;
 
 import gg.lode.sign.api.nametag.IVirtualNametag;
+import gg.lode.sign.Sign;
+import gg.lode.sign.config.NametagConfig;
 import gg.lode.sign.entities.ClientTextDisplay;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
@@ -42,8 +44,17 @@ public class VirtualNametag implements IVirtualNametag {
         // Spawned at the world's origin and never moved: mounting is what puts it in the right place,
         // and the spawn position only matters for the tick before the mount arrives.
         this.display = new ClientTextDisplay(new Location(Bukkit.getWorlds().get(0), 0, 0, 0));
-        this.display.setSeeThrough(false);
         this.display.setText(Component.empty());
+
+        // Dressed from the same config a player's nametag uses, so a tag on a replayed subject looks
+        // like a tag on a player. The billboard matters most: left unset the client defaults to FIXED,
+        // which means the text only faces one direction and is edge-on or backwards from anywhere else.
+        NametagConfig config = Sign.getInstance().config().getNametagConfig();
+        display.setBillboard(config.getBillboard());
+        display.setScale(config.getScale());
+        display.setTextShadow(config.hasTextShadow());
+        display.setTextAlignment(config.getTextAlignment());
+        display.setSeeThrough(config.isSeeThrough());
     }
 
     @Override

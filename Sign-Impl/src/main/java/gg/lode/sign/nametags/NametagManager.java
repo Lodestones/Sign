@@ -70,9 +70,10 @@ public class NametagManager implements INametagManager {
         for (Nametag nametag : nametags.values()) {
             this.remove(nametag.getPlayer());
         }
-        for (VirtualNametag virtual : List.copyOf(virtualNametags)) {
-            virtual.remove();
-        }
+        // Virtual tags are deliberately left standing. They belong to whoever asked for them — a replay,
+        // most likely — and that caller is not watching for a reload: taking them down here meant
+        // /sign reload silently stripped every tag off a replay's subjects with no way to get them back.
+        // A caller that wants them gone says so with clearVirtual().
     }
 
     @Override
@@ -85,6 +86,11 @@ public class NametagManager implements INametagManager {
     /** Every virtual tag still standing, so a leaving viewer can be dropped from all of them. */
     public Collection<VirtualNametag> getVirtual() {
         return List.copyOf(virtualNametags);
+    }
+
+    /** Takes down every virtual tag. For a caller that owns them, not for a reload. */
+    public void clearVirtual() {
+        for (VirtualNametag nametag : List.copyOf(virtualNametags)) nametag.remove();
     }
 
     void forgetVirtual(VirtualNametag nametag) {
