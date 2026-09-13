@@ -3,6 +3,7 @@ package gg.lode.sign.nametags;
 import gg.lode.sign.Sign;
 import gg.lode.sign.api.nametag.IVirtualNametag;
 import gg.lode.sign.config.NametagConfig;
+import gg.lode.sign.entities.ClientEntity;
 import gg.lode.sign.entities.ClientTextDisplay;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
@@ -205,19 +206,23 @@ public class VirtualNametag implements IVirtualNametag {
         if (removed) return;
         for (Player viewer : List.copyOf(viewers)) {
             if (!viewer.isOnline()) continue;
-            for (ClientTextDisplay display : displays.getOrDefault(viewer.getUniqueId(), List.of())) {
-                display.mount(vehicleEntityId, viewer);
-            }
+            List<ClientTextDisplay> mine = displays.getOrDefault(viewer.getUniqueId(), List.of());
+            if (mine.isEmpty()) continue;
+            ClientEntity.sendBundle(viewer, List.of(ClientEntity.createMountPacket(vehicleEntityId, mine)));
         }
     }
 
     private void spawnAll(Player viewer) {
-        for (ClientTextDisplay display : displays.getOrDefault(viewer.getUniqueId(), List.of())) {
+        List<ClientTextDisplay> mine = displays.getOrDefault(viewer.getUniqueId(), List.of());
+        for (ClientTextDisplay display : mine) {
             display.spawn(viewer);
             display.update(viewer);
-            // Last, and always: a mount sent before the display exists client-side is dropped, and the
-            // tag then sits wherever it spawned rather than above its vehicle.
-            display.mount(vehicleEntityId, viewer);
+        }
+        // One mount for all of them, after they exist client-side. SET_PASSENGERS replaces the vehicle's
+        // whole passenger list, so a mount per display left only the last line riding and dropped the
+        // rest at the point they spawned — which read as the bottom line replacing the tag.
+        if (!mine.isEmpty()) {
+            ClientEntity.sendBundle(viewer, List.of(ClientEntity.createMountPacket(vehicleEntityId, mine)));
         }
     }
 

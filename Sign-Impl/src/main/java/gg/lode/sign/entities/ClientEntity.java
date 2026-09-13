@@ -92,6 +92,21 @@ public class ClientEntity {
     }
 
     /**
+     * Mounts several client entities on a bare entity id, in one packet.
+     *
+     * <p>It has to be one packet. SET_PASSENGERS replaces the vehicle's whole passenger list, so sending
+     * one per passenger leaves only the last of them riding and the rest sitting wherever they spawned —
+     * which for a multi-line nametag means every line but the bottom one disappears.
+     */
+    public static PacketWrapper<?> createMountPacket(int vehicleEntityId,
+                                                    List<? extends ClientEntity> passengers) {
+        int[] ids = new int[passengers.size()];
+        int index = 0;
+        for (ClientEntity passenger : passengers) ids[index++] = passenger.getEntityId();
+        return new WrapperPlayServerSetPassengers(vehicleEntityId, ids);
+    }
+
+    /**
      * Builds a SET_PASSENGERS packet mounting the given client-side entities on
      * {@code entity}. The packet is absolute — it replaces the client's whole
      * passenger list for that vehicle — so the vehicle's real server-side
