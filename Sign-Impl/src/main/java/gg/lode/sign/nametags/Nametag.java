@@ -385,6 +385,29 @@ public class Nametag implements INametag {
     }
 
     /**
+     * Forgets that a viewer was ever shown this tag, without sending anything.
+     *
+     * <p>For a client that has thrown the entities away on its own — which is what a dimension change
+     * does: the client clears its whole entity registry, so every display this tag had there is gone.
+     * Sending a hide would be addressed to entities that no longer exist, and leaving the viewer in the
+     * set is worse: the tag believes it is still shown, never spawns anything again, and the heartbeat
+     * re-sends mounts for a display id the client has never heard of and silently drops.
+     *
+     * <p>Followed by {@link #updateVisibilityFor(Player)} to put it back properly.
+     */
+    public void forgetViewer(Player viewer) {
+        UUID id = viewer.getUniqueId();
+        viewers.remove(id);
+        tracked.remove(id);
+    }
+
+    /** The same for everybody, for when the tag's own player is the one that changed worlds. */
+    public void forgetAllViewers() {
+        viewers.clear();
+        tracked.clear();
+    }
+
+    /**
      * Re-sends the mount packet to a viewer without respawning the display entities.
      * Used to restore mounts after the client drops them (e.g., when the player is
      * mounted as a passenger on another entity via GSit or player riding).

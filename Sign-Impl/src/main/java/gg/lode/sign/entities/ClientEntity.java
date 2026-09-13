@@ -76,6 +76,22 @@ public class ClientEntity {
     }
 
     /**
+     * Mounts this entity on a bare entity id.
+     *
+     * <p>For a vehicle the server does not have — a packet-built player in a replay, say. Nothing is
+     * merged in, unlike the {@link Entity} form above: an entity the server has never heard of has no
+     * server-side passengers to preserve, and asking for them is not possible anyway.
+     */
+    public PacketWrapper<?> createMountPacket(int vehicleEntityId) {
+        return new WrapperPlayServerSetPassengers(vehicleEntityId, new int[]{this.entityId});
+    }
+
+    /** Sends that mount to one viewer. */
+    public void mount(int vehicleEntityId, Player viewer) {
+        sendPacket(createMountPacket(vehicleEntityId), viewer);
+    }
+
+    /**
      * Builds a SET_PASSENGERS packet mounting the given client-side entities on
      * {@code entity}. The packet is absolute — it replaces the client's whole
      * passenger list for that vehicle — so the vehicle's real server-side

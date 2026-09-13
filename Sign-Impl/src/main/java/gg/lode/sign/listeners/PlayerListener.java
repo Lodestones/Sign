@@ -21,8 +21,24 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
         if (!plugin.config().getNametagConfig().isEnabled()) return;
 
-        if (nametagManager.get(player) != null) {
-            // World/dimension change — nametag persists, DESTROY/SPAWN packets handle visibility
+        Nametag existing = nametagManager.get(player);
+        if (existing != null) {
+            // A world or dimension change, and the client has just finished loading the new one — which
+            // means it threw away every entity it had, these displays included. What was believed here
+            // before is that DESTROY/SPAWN would cover it; nothing sends either, so the tag went on
+            // believing it was shown, never spawned anything again, and the five-second heartbeat
+            // re-sent mounts naming display ids the client no longer had and dropped every one.
+            //
+            // So the bookkeeping is dropped on both sides and rebuilt: this player's own tag for
+            // everybody who can see them now, and everybody else's for this player, who has just lost
+            // all of them.
+            existing.forgetAllViewers();
+            existing.showToEligible();
+            for (Nametag nametag : nametagManager.getAll()) {
+                if (nametag == existing) continue;
+                nametag.forgetViewer(player);
+                nametag.updateVisibilityFor(player);
+            }
             return;
         }
 
@@ -40,6 +56,9 @@ public class PlayerListener implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         if (plugin.config().getNametagConfig().isEnabled()) {
             nametagManager.remove(event.getPlayer());
+            // Tags riding an entity id are keyed by nothing, so nothing else drops a viewer who has
+            // gone — and a later line change would send packets down a closed connection.
+            nametagManager.forgetViewer(event.getPlayer());
         }
     }
 
@@ -63,15 +82,19 @@ public class PlayerListener implements Listener {
         plugin.getServer().getScheduler().runTaskLater(plugin.host(), () -> {
             if (!player.isOnline()) return;
 
-            // Re-show after death hid the nametag (entity still exists on viewers' clients)
+            // Re-show after death hid the nametag. The entity survives a same-world respawn on
+            // viewers' clients, but a death that sends somebody to another dimension — the nether,
+            // most of the time — clears it, so what was shown before cannot be trusted either way.
             Nametag nametag = nametagManager.get(player);
             if (nametag != null) {
+                nametag.forgetAllViewers();
                 nametag.showToEligible();
             }
 
             // Show existing nametags to the respawned player
             for (Nametag other : nametagManager.getAll()) {
                 if (other.getPlayer().getUniqueId().equals(player.getUniqueId())) continue;
+                other.forgetViewer(player);
                 other.updateVisibilityFor(player);
             }
         }, 2L);
