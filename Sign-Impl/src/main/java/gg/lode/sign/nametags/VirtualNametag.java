@@ -7,7 +7,6 @@ import gg.lode.sign.entities.ClientEntity;
 import gg.lode.sign.entities.ClientTextDisplay;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.JoinConfiguration;
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import com.github.retrooper.packetevents.util.Vector3f;
@@ -79,12 +78,15 @@ public class VirtualNametag implements IVirtualNametag {
         return own != null ? own : lines;
     }
 
-    private List<ClientTextDisplay> build(List<Component> forLines) {
+    private List<ClientTextDisplay> build(List<Component> forLines, Player viewer) {
         NametagConfig config = Sign.getInstance().config().getNametagConfig();
         int background = Nametag.configuredBackground();
-        // Spawned at the origin of the first world and never moved: the mount is what puts it in place,
-        // and the spawn position only matters for the moment before the mount lands.
-        Location somewhere = new Location(Bukkit.getWorlds().get(0), 0, 0, 0);
+        // On top of the viewer, and never moved afterwards: the mount is what puts it in place, and the
+        // spawn position only matters until that lands. It used to be the origin of the first world,
+        // which is a chunk the viewer may not have loaded, and a client drops an entity spawned into
+        // one of those. A replay that put somebody down next to a subject a thousand blocks out
+        // therefore had no tags at all, while one that left them at spawn looked fine.
+        Location somewhere = viewer.getLocation();
 
         List<ClientTextDisplay> built = new ArrayList<>();
         int count = condensed ? 1 : Math.max(1, forLines.size());
@@ -142,7 +144,7 @@ public class VirtualNametag implements IVirtualNametag {
 
         if (existing == null || have != need) {
             if (existing != null) for (ClientTextDisplay display : existing) display.despawn(viewer);
-            List<ClientTextDisplay> built = build(want);
+            List<ClientTextDisplay> built = build(want, viewer);
             displays.put(viewer.getUniqueId(), built);
             spawnAll(viewer);
             return;
@@ -162,7 +164,7 @@ public class VirtualNametag implements IVirtualNametag {
     public void show(Player viewer) {
         if (removed || viewer == null || !viewer.isOnline()) return;
         if (!viewers.add(viewer)) return;
-        displays.computeIfAbsent(viewer.getUniqueId(), id -> build(linesFor(viewer)));
+        displays.computeIfAbsent(viewer.getUniqueId(), id -> build(linesFor(viewer), viewer));
         spawnAll(viewer);
     }
 
