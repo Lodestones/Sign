@@ -81,12 +81,18 @@ public class VirtualNametag implements IVirtualNametag {
     private List<ClientTextDisplay> build(List<Component> forLines, Player viewer) {
         NametagConfig config = Sign.getInstance().config().getNametagConfig();
         int background = Nametag.configuredBackground();
-        // On top of the viewer, and never moved afterwards: the mount is what puts it in place, and the
-        // spawn position only matters until that lands. It used to be the origin of the first world,
-        // which is a chunk the viewer may not have loaded, and a client drops an entity spawned into
-        // one of those. A replay that put somebody down next to a subject a thousand blocks out
-        // therefore had no tags at all, while one that left them at spawn looked fine.
-        Location somewhere = viewer.getLocation();
+        // The viewer's own column, far below them, and never moved afterwards: the mount is what puts
+        // it in place.
+        //
+        // The chunk is the part that matters. It used to be the origin of the first world, which a
+        // viewer standing anywhere else does not have loaded, and a client drops an entity spawned
+        // into a chunk it does not have: a replay that put somebody down beside a subject a thousand
+        // blocks out then had no tags at all. The viewer's own chunk is always loaded.
+        //
+        // Deep below, because the mount does not always land on the first try — the vehicle may be an
+        // entity that client has not been sent yet — and until it does the tag sits where it spawned.
+        // At the viewer's own feet that is a pile of everybody's names stacked on their screen.
+        Location somewhere = viewer.getLocation().clone().subtract(0, 512, 0);
 
         List<ClientTextDisplay> built = new ArrayList<>();
         int count = condensed ? 1 : Math.max(1, forLines.size());
