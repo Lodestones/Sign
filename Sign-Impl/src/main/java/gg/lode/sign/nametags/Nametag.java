@@ -67,6 +67,11 @@ public class Nametag implements INametag {
     // Viewer whitelist — null means everyone may see the tag
     private volatile Set<UUID> viewerWhitelist;
 
+    // How far the tag is moved from where the hitbox would put it, in blocks. For players whose pose
+    // is a client-side animation — crawling, downed — where the hitbox says standing and the body is
+    // on the floor.
+    private volatile float offsetY;
+
     // Per-viewer line overrides
     private final Map<UUID, List<String>> viewerOverrides;
 
@@ -110,16 +115,37 @@ public class Nametag implements INametag {
         int background = getBackground();
 
         if (condensed) {
-            this.condensedDisplay = createDisplay(config, background, new Vector3f(0, BASE_Y_OFFSET, 0));
+            this.condensedDisplay = createDisplay(config, background, translationFor(0, 1));
             this.lineDisplays = null;
         } else {
             this.condensedDisplay = null;
             this.lineDisplays = new ArrayList<>(lines.size());
             for (int i = 0; i < lines.size(); i++) {
-                float y = BASE_Y_OFFSET + (lines.size() - 1 - i) * LINE_SPACING;
-                lineDisplays.add(createDisplay(config, background, new Vector3f(0, y, 0)));
+                lineDisplays.add(createDisplay(config, background, translationFor(i, lines.size())));
             }
             this.cachedLineTexts = new ArrayList<>(Collections.nCopies(lines.size(), null));
+        }
+    }
+
+    /**
+     * Where one line sits above the player it rides.
+     *
+     * <p>The displays are mounted on the player, so the client puts them where their vehicle is and
+     * the server's own location for them is only a starting point. This translation is the whole of
+     * the height, which is why the offset belongs here and not in the location.
+     */
+    private Vector3f translationFor(int index, int count) {
+        return new Vector3f(0, BASE_Y_OFFSET + (count - 1 - index) * LINE_SPACING + offsetY, 0);
+    }
+
+    /** Puts every line back where the current offset says it goes. */
+    private void applyTranslations() {
+        if (condensed) {
+            condensedDisplay.setTranslation(translationFor(0, 1));
+            return;
+        }
+        for (int i = 0; i < lineDisplays.size(); i++) {
+            lineDisplays.get(i).setTranslation(translationFor(i, lineDisplays.size()));
         }
     }
 
@@ -504,11 +530,12 @@ public class Nametag implements INametag {
             }
         }
 
-        // Create additional displays
+        // Create additional displays. Every line moves up by one when a line is added below it, so
+        // the ones that already existed are re-placed too rather than left at the old spacing.
         for (int i = lineDisplays.size(); i < needed; i++) {
-            float y = BASE_Y_OFFSET + (needed - 1 - i) * LINE_SPACING;
-            lineDisplays.add(createDisplay(config, background, new Vector3f(0, y, 0)));
+            lineDisplays.add(createDisplay(config, background, translationFor(i, needed)));
         }
+        applyTranslations();
 
         // Re-show to all previous viewers
         for (UUID viewerUuid : previousViewers) {
@@ -826,6 +853,25 @@ public class Nametag implements INametag {
     @Override
     public boolean hasOverride() {
         return globalOverride != null;
+    }
+
+    @Override
+    public void setOffset(float offsetY) {
+        if (this.offsetY == offsetY) return;
+        this.offsetY = offsetY;
+        applyTranslations();
+
+        // Pushed rather than left for the scheduler: its pass only re-sends a tag whose text has
+        // changed, and moving one does not change a word of it.
+        for (UUID viewerUuid : new HashSet<>(viewers)) {
+            Player viewer = Bukkit.getPlayer(viewerUuid);
+            if (viewer != null && viewer.isOnline()) sendMetadataUpdate(viewer);
+        }
+    }
+
+    @Override
+    public float getOffset() {
+        return this.offsetY;
     }
 
     @Override
