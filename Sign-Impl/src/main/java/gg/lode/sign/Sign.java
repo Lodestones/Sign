@@ -2,6 +2,8 @@ package gg.lode.sign;
 
 import dev.jorel.commandapi.CommandAPI;
 import dev.jorel.commandapi.CommandAPIPaperConfig;
+import gg.lode.bookshelflocales.LocaleManager;
+import gg.lode.bookshelflocales.picker.LanguagePicker;
 import gg.lode.sign.api.ISign;
 import gg.lode.sign.api.SignAPI;
 import gg.lode.sign.api.bootstrap.SignBootstrap;
@@ -30,13 +32,22 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.Locale;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import net.kyori.adventure.text.Component;
+import org.bukkit.entity.Player;
+import gg.lode.bookshelfapi.api.util.VariableContext;
 
 public final class Sign implements ISign, SignBootstrap {
     public static final String VERSION = "${VERSION}";
 
-    private static final int CONFIG_VERSION = 2;
+    private static final int CONFIG_VERSION = 3;
+
+    private static final String[] BUNDLED_LOCALES = {
+            "en_us", "es_es", "pt_br", "fr_fr", "de_de", "it_it", "nl_nl",
+            "pl_pl", "ru_ru", "tr_tr", "ja_jp", "ko_kr", "zh_cn", "zh_tw"
+    };
 
     private static Sign instance;
     private static SignConfig config;
@@ -45,6 +56,7 @@ public final class Sign implements ISign, SignBootstrap {
     private NametagManager nametagManager;
     private NametagScheduler nametagScheduler;
     private PlayerListener playerListener;
+    private LocaleManager locales;
 
     public JavaPlugin host() { return host; }
     public Server getServer() { return host.getServer(); }
@@ -82,6 +94,15 @@ public final class Sign implements ISign, SignBootstrap {
         PacketEvents.getAPI().init();
         CommandAPI.onEnable();
         PluginManager pluginManager = host.getServer().getPluginManager();
+
+        this.locales = LocaleManager.builder()
+                .defaultLocale("en_us")
+                .bundled(getClass().getClassLoader(), "locales", BUNDLED_LOCALES)
+                .github("Lodestones/Locales", "Sign")
+                .folder(getDataFolder().toPath().resolve("locales"))
+                .exportBundledDefaults(true)
+                .logger(getLogger()::warning)
+                .build();
 
         this.nametagManager = new NametagManager();
         this.nametagScheduler = new NametagScheduler(this);
@@ -124,6 +145,7 @@ public final class Sign implements ISign, SignBootstrap {
         try {
             getLogger().info("Reloading...");
             config.reload();
+            locales.reload();
             nametagScheduler.stop();
             nametagManager.removeAll();
             if (config().getNametagConfig().isEnabled()) {
@@ -185,6 +207,11 @@ public final class Sign implements ISign, SignBootstrap {
                         cfg.set("nametags.display.placeholder-depth", 5);
                     }
                 }
+                case 2 -> {
+                    if (!cfg.contains("language")) {
+                        cfg.set("language", LanguagePicker.AUTOMATIC);
+                    }
+                }
             }
 
             currentVersion++;
@@ -209,5 +236,50 @@ public final class Sign implements ISign, SignBootstrap {
 
     public PlayerListener getPlayerListener() {
         return playerListener;
+    }
+
+    public LocaleManager locales() {
+        return locales;
+    }
+
+    /**
+     * Resolves {@code key} in the recipient's own language where they have one, so
+     * a server that ships more than one locale file does not have to pick a single
+     * language for everybody.
+     */
+    public Component message(Object recipient, String key, VariableContext variables) {
+        String locale = localeOf(recipient);
+        return variables == null ? locales.get(key, locale) : locales.get(key, locale, variables);
+    }
+
+    public Component message(Object recipient, String key) {
+        return message(recipient, key, null);
+    }
+
+    /** Raw MiniMessage for {@code key} in the recipient's language, for dialog labels. */
+    public String text(Object recipient, String key) {
+        return locales._get(key, localeOf(recipient));
+    }
+
+    private String localeOf(Object recipient) {
+        // A language picked in config wins. "auto" leaves it to each player's own.
+        String language = getLanguage();
+        if (!LanguagePicker.AUTOMATIC.equalsIgnoreCase(language) && locales.hasLocale(language)) {
+            return language.toLowerCase(Locale.ROOT);
+        }
+
+        String locale = recipient instanceof Player player
+                ? player.locale().toString().toLowerCase(Locale.ROOT)
+                : locales.getDefaultLocale();
+        return locales.hasLocale(locale) ? locale : locales.getDefaultLocale();
+    }
+
+    public String getLanguage() {
+        return host.getConfig().getString("language", LanguagePicker.AUTOMATIC);
+    }
+
+    public void setLanguage(String language) {
+        host.getConfig().set("language", language);
+        host.saveConfig();
     }
 }

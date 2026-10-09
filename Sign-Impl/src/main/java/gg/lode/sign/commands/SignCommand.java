@@ -32,9 +32,9 @@ public class SignCommand extends CommandAPICommand {
                 .executes((sender, args) -> {
                     boolean success = plugin.reloadPlugin();
                     if (success) {
-                        MessageHelper.send(sender, "Reloaded Sign configuration.");
+                        sender.sendMessage(plugin.message(sender, "sign.command.reload.done"));
                     } else {
-                        MessageHelper.send(sender, "Failed to reload Sign, check the server logs.");
+                        sender.sendMessage(plugin.message(sender, "sign.command.reload.failed"));
                     }
                 })
         );

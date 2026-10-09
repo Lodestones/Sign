@@ -6,6 +6,11 @@
 # Wiki: https://docs.lode.gg/sign/server-owners/overview
 version: 2
 
+# Language setting for Sign messages.
+# Set to "auto" to use each player's client language (falls back to en_us).
+# Or set to a specific language code (e.g., "es_es", "fr_fr", "de_de") to force everyone to use that language.
+language: auto
+
 nametags:
   # Enable the nametags.
   # Set this to false if you want the vanilla player nametags shown instead.
