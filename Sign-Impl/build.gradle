@@ -37,6 +37,13 @@ java {
     toolchain { languageVersion = JavaLanguageVersion.of(21) }
 }
 
+// Bookshelf-Locales calls MiniMessageHelper / VariableContext from Bookshelf-API,
+// which Sign can't see at runtime (Bookshelf isn't a dependency). Shade just
+// those classes, relocated so they never meet a real Bookshelf's copy.
+configurations {
+    bookshelfApiSlice { transitive = false }
+}
+
 dependencies {
     implementation(project(":Sign-API"))
     compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
@@ -52,6 +59,7 @@ dependencies {
     compileOnly("de.maxhenkel.voicechat:voicechat-api:2.5.0")
     compileOnly("gg.lode:Amplifier-API:1.0.13")
     compileOnly("com.github.Lodestones:Frame-API:1.0.4")
+    bookshelfApiSlice("gg.lode:Bookshelf-API:1.2.49")
 }
 
 processResources {
@@ -98,6 +106,14 @@ shadowJar {
     archiveVersion.set("${version}")
     archiveClassifier.set('')
     from(project(":Sign-API").sourceSets.main.output)
+    from({ zipTree(project.configurations.bookshelfApiSlice.singleFile) }) {
+        include 'gg/lode/bookshelfapi/api/util/MiniMessageHelper*.class'
+        include 'gg/lode/bookshelfapi/api/util/VariableContext*.class'
+        include 'gg/lode/bookshelfapi/api/util/LegacyHelper*.class'
+        include 'gg/lode/bookshelfapi/api/kyori/*.class'
+        include 'gg/lode/bookshelfapi/api/compat/DialogCompat*.class'
+        include 'gg/lode/bookshelfapi/api/compat/HeadCompat*.class'
+    }
     manifest {
         attributes('paperweight-mappings-namespace': 'mojang')
     }
@@ -106,6 +122,7 @@ shadowJar {
     relocate('io.github.retrooper.packetevents', 'io.github.retrooper.packetevents.sign')
     relocate('org.bstats', 'gg.lode.sign.bstats')
     relocate('gg.lode.bookshelflocales', 'gg.lode.bookshelflocales.sign')
+    relocate('gg.lode.bookshelfapi', 'gg.lode.sign.libs.bookshelfapi')
 }
 
 jar {

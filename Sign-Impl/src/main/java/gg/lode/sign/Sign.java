@@ -132,8 +132,8 @@ public final class Sign implements ISign, SignBootstrap {
     @Override
     public void onDisable(JavaPlugin host) {
         if (DependencyHelper.isFrameEnabled()) FrameHook.unregister();
-        AmplifierHook.unregister();
-        VoiceChatHook.unregister();
+        if (DependencyHelper.isAmplifierEnabled()) AmplifierHook.unregister();
+        if (DependencyHelper.isSimpleVoiceChatEnabled()) VoiceChatHook.unregister();
         if (nametagScheduler != null) nametagScheduler.stop();
         if (nametagManager != null) nametagManager.removeAll();
         PacketEvents.getAPI().terminate();
